@@ -14,7 +14,7 @@ This document records the dependency and compatibility decision for the migratio
 
 Official sources: [Next.js 16 upgrade guide](https://nextjs.org/docs/app/guides/upgrading/version-16), [Next.js support policy](https://nextjs.org/support-policy), [v15.5.27 release](https://github.com/vercel/next.js/releases/tag/v15.5.27), [v16.4.3 release](https://github.com/vercel/next.js/releases/tag/v16.4.3), [Next.js tag comparison](https://github.com/vercel/next.js/compare/v15.5.27...v16.4.3), [ESLint support policy](https://eslint.org/version-support/), and [ESLint v10.14.0 release](https://github.com/eslint/eslint/releases/tag/v10.14.0). Registry integrity and peer/runtime metadata were read from the official npm registry before retaining the dependency changes.
 
-The selected runtime remains Node.js `>=22`, which satisfies Next.js 16's `>=20.9.0` requirement. Local validation uses Node 24.19.0 and CI uses the maintained Node 22 line. TypeScript resolves to 5.9.3, above the documented 5.1 minimum. The pnpm version remains the declared `12.14.0`.
+The selected runtime remains Node.js `>=22`, which satisfies Next.js 16's `>=20.9.0` requirement. Local validation covered Node 24.19.0 and the final clean worktree used Node 24.22.0; CI uses the maintained Node 22 line. TypeScript resolves to 5.9.3, above the documented 5.1 minimum. The pnpm version remains the declared `12.14.0`.
 
 The selected dependency graph is fixed by `pnpm-lock.yaml` with SHA-256 `4CFC36FE49570B1E1227180FC4E3B39D48639672AE4AD42F07249AB39730E2EF`. A frozen install resolves `next@16.4.3`, `react@19.3.0`, `react-dom@19.3.0`, `eslint@9.39.5`, and `eslint-config-next@16.4.3`; `pnpm peers check` reports no peer dependency issues.
 
