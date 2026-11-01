@@ -9,3 +9,6 @@ onlyBuiltDependencies:
   - "@esbuild/linux-x64"
   - "sharp"
   - "unrs-resolver"
+overrides:
+  "@types/react": 19.3.0
+  "@types/react-dom": 19.3.0
