@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { db } from "@/db";
 import { invoices } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { requireAuthenticatedUser } from "@/lib/auth/guard";
+import { authErrorResponse, privateJson } from "@/lib/auth/responses";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -13,9 +15,10 @@ export async function GET(
   { params }: RouteParams
 ) {
   try {
+    await requireAuthenticatedUser();
     const { id } = await params;
     if (!z.string().uuid().safeParse(id).success) {
-      return NextResponse.json({ success: false, error: "Invalid invoice ID" }, { status: 400 });
+      return privateJson({ success: false, error: "Invalid invoice ID" }, { status: 400 });
     }
 
     const invoice = await db.query.invoices.findFirst({
@@ -34,20 +37,22 @@ export async function GET(
     });
 
     if (!invoice) {
-      return NextResponse.json(
+      return privateJson(
         { success: false, error: "Invoice not found" },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({
+    return privateJson({
       success: true,
       data: invoice,
     });
   } catch (error: unknown) {
+    const authenticationError = authErrorResponse(error);
+    if (authenticationError) return authenticationError;
     const message = "Failed to fetch invoice details";
     console.error("API GET /api/invoices/[id] error:", error);
-    return NextResponse.json(
+    return privateJson(
       { success: false, error: message },
       { status: 500 }
     );

@@ -44,6 +44,11 @@ try {
     "--detach",
     "--name", name,
     "--publish", "127.0.0.1::3000",
+    "--env", "NEXTAUTH_URL=http://127.0.0.1:3000",
+    "--env", "NEXTAUTH_SECRET=synthetic-container-secret-that-is-long-enough",
+    "--env", "GOOGLE_CLIENT_ID=synthetic.apps.googleusercontent.com",
+    "--env", "GOOGLE_CLIENT_SECRET=synthetic-google-secret",
+    "--env", "GOOGLE_WORKSPACE_DOMAIN=clinicacruzceleste.com",
     image,
   ]);
 
@@ -54,9 +59,21 @@ try {
   const health = await waitFor(`http://127.0.0.1:${port}/api/health`);
   assert.deepEqual(await health.json(), { status: "ok" });
 
-  const home = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(5_000) });
-  assert.equal(home.status, 200);
-  assert.match(await home.text(), /Mini Invoice Approval Desk/);
+  const home = await fetch(`http://127.0.0.1:${port}/`, {
+    redirect: "manual",
+    signal: AbortSignal.timeout(5_000),
+  });
+  assert.equal(home.status, 307);
+  assert.equal(home.headers.get("location"), "/login");
+
+  const login = await fetch(`http://127.0.0.1:${port}/login`, { signal: AbortSignal.timeout(5_000) });
+  assert.equal(login.status, 200);
+  assert.match(await login.text(), /Sign in with Google/);
+
+  const invoices = await fetch(`http://127.0.0.1:${port}/api/invoices`, { signal: AbortSignal.timeout(5_000) });
+  assert.equal(invoices.status, 401);
+  assert.match(invoices.headers.get("cache-control") ?? "", /private/);
+  assert.match(invoices.headers.get("cache-control") ?? "", /no-store/);
 
   const runtime = docker([
     "exec",
@@ -75,7 +92,7 @@ try {
   assert.ok(exitCode === "0" || exitCode === "143", `Unexpected stop exit code: ${exitCode}`);
   assert.equal(inspect("{{.State.OOMKilled}}"), "false");
 
-  console.log(`Container verification passed for ${image}: linux/amd64, non-root, health, app, exclusions, and SIGTERM stop (${elapsedMs}ms, exit ${exitCode}).`);
+  console.log(`Container verification passed for ${image}: linux/amd64, non-root, public health/login, protected app/API, exclusions, and SIGTERM stop (${elapsedMs}ms, exit ${exitCode}).`);
 } finally {
   docker(["rm", "--force", name], { allowFailure: true });
 }

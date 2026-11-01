@@ -1,12 +1,15 @@
 import { calculateStats } from "@/lib/stats";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { db } from "@/db";
 import { invoices } from "@/db/schema";
 import { and, eq, ilike, inArray, or } from "drizzle-orm";
 import type { TabType } from "@/types/invoice";
+import { requireAuthenticatedUser } from "@/lib/auth/guard";
+import { authErrorResponse, privateJson } from "@/lib/auth/responses";
 
 export async function GET(request: NextRequest) {
   try {
+    await requireAuthenticatedUser();
     const { searchParams } = new URL(request.url);
     const tab = (searchParams.get("tab") as TabType) || "all";
     const search = searchParams.get("search")?.trim() || "";
@@ -67,16 +70,18 @@ export async function GET(request: NextRequest) {
     const stats = calculateStats(allInvoices);
     const vendorSet = new Set(allInvoices.map((invoice) => invoice.vendorName));
 
-    return NextResponse.json({
+    return privateJson({
       success: true,
       data: invoiceList,
       stats,
       vendors: Array.from(vendorSet).sort(),
     });
   } catch (error: unknown) {
+    const authenticationError = authErrorResponse(error);
+    if (authenticationError) return authenticationError;
     const message = "Failed to fetch invoices";
     console.error("API GET /api/invoices error:", error);
-    return NextResponse.json(
+    return privateJson(
       {
         success: false,
         error: message,

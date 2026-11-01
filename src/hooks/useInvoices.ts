@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { InvoiceWithRelations, KPIStats, TabType } from "@/types/invoice";
 
 interface InvoicesResponse {
@@ -43,70 +43,5 @@ export function useInvoiceDetailQuery(id: string | null | undefined) {
       return res.json();
     },
     enabled: Boolean(id),
-  });
-}
-
-interface UpdateStatusVariables {
-  id: string;
-  status: "APPROVED" | "REJECTED";
-  note?: string;
-  actor?: string;
-}
-
-export function useUpdateInvoiceStatus() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ id, status, note, actor }: UpdateStatusVariables) => {
-      const res = await fetch(`/api/invoices/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, note, actor }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to update status");
-      }
-      return data.data as InvoiceWithRelations;
-    },
-    onMutate: async ({ id, status }) => {
-      // Cancel outgoing queries to avoid overwriting optimistic update
-      await queryClient.cancelQueries({ queryKey: ["invoices"] });
-
-      // Snapshot previous data across active invoice queries
-      const previousInvoicesQueries = queryClient.getQueriesData<InvoicesResponse>({
-        queryKey: ["invoices"],
-      });
-
-      // Optimistically update every cached invoices query
-      queryClient.setQueriesData<InvoicesResponse>(
-        { queryKey: ["invoices"] },
-        (old) => {
-          if (!old || !old.data) return old;
-          return {
-            ...old,
-            data: old.data.map((inv) =>
-              inv.id === id ? { ...inv, status } : inv
-            ),
-          };
-        }
-      );
-
-      return { previousInvoicesQueries };
-    },
-    onError: (_err, _variables, context) => {
-      // Rollback on failure
-      if (context?.previousInvoicesQueries) {
-        context.previousInvoicesQueries.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data);
-        });
-      }
-    },
-    onSettled: () => {
-      // Always refetch to guarantee sync with database
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["invoice"] });
-      queryClient.invalidateQueries({ queryKey: ["stats"] });
-    },
   });
 }
