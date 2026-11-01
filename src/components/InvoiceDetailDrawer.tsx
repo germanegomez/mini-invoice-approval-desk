@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import type { InvoiceWithRelations } from "@/types/invoice";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { StatusBadge } from "./StatusBadge";
-import { RejectModal } from "./RejectModal";
 import {
   Sheet,
   SheetContent,
@@ -25,42 +24,17 @@ interface InvoiceDetailDrawerProps {
   invoice: InvoiceWithRelations | null;
   isOpen: boolean;
   onClose: () => void;
-  onStatusUpdate: (id: string, status: "APPROVED" | "REJECTED", note?: string, actor?: string) => Promise<void>;
 }
 
 export function InvoiceDetailDrawer({
   invoice,
   isOpen,
   onClose,
-  onStatusUpdate,
 }: InvoiceDetailDrawerProps) {
-  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
-  const [isApproving, setIsApproving] = useState(false);
-
   if (!invoice) return null;
 
   const isDuplicate = !!invoice.duplicateOfId || invoice.flags?.includes("DUPLICATE_SUSPECTED");
   const originalInvoice = invoice.duplicateOf;
-
-  const handleApprove = async () => {
-    try {
-      setIsApproving(true);
-      await onStatusUpdate(
-        invoice.id,
-        "APPROVED",
-        "Approved for payment",
-        "Reviewer"
-      );
-    } catch (err) {
-      alert("Failed to approve invoice: " + String(err));
-    } finally {
-      setIsApproving(false);
-    }
-  };
-
-  const handleConfirmReject = async (reason: string, actor: string) => {
-    await onStatusUpdate(invoice.id, "REJECTED", reason, actor);
-  };
 
   return (
     <>
@@ -110,10 +84,10 @@ export function InvoiceDetailDrawer({
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2">
-              {/* Reject Button (Triggers Radix RejectModal) */}
+              {/* Business actions remain disabled until ticket #61 supplies permissions. */}
               <button
-                onClick={() => setIsRejectModalOpen(true)}
-                disabled={invoice.status === "REJECTED" || isApproving}
+                disabled
+                title="Actions are disabled until permissions are implemented"
                 className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-mono font-semibold rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <XCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
@@ -122,12 +96,12 @@ export function InvoiceDetailDrawer({
 
               {/* Approve Button */}
               <button
-                onClick={handleApprove}
-                disabled={invoice.status === "APPROVED" || isApproving}
+                disabled
+                title="Actions are disabled until permissions are implemented"
                 className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-mono font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
               >
                 <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                <span>{isApproving ? "Approving..." : "Approve"}</span>
+                <span>Approve</span>
               </button>
             </div>
           </div>
@@ -331,11 +305,6 @@ export function InvoiceDetailDrawer({
                           </span>
                         </div>
 
-                        <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                          <span className="font-mono">Actor: </span>
-                          <span className="text-zinc-800 dark:text-zinc-300 font-medium">{item.actor}</span>
-                        </div>
-
                         {item.note && (
                           <p className="text-[11px] text-zinc-700 dark:text-zinc-300 font-sans italic pt-1 border-t border-zinc-200 dark:border-zinc-800/60 mt-1">
                             &ldquo;{item.note}&rdquo;
@@ -353,14 +322,6 @@ export function InvoiceDetailDrawer({
         </SheetContent>
       </Sheet>
 
-      {/* Rejection Modal (Radix Dialog Portal with z-[70] overlay) */}
-      <RejectModal
-        isOpen={isRejectModalOpen}
-        onClose={() => setIsRejectModalOpen(false)}
-        onConfirm={handleConfirmReject}
-        invoiceNumber={invoice.invoiceNumber}
-        vendorName={invoice.vendorName}
-      />
     </>
   );
 }

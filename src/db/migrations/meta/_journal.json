@@ -8,6 +8,13 @@
       "when": 1791262214756,
       "tag": "0000_complex_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793558662517,
+      "tag": "0001_remove_client_actor",
+      "breakpoints": true
     }
   ]
 }

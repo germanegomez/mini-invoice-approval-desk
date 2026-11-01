@@ -1,4 +1,3 @@
-import { z } from "zod";
 import type { Invoice, InvoiceItem, InvoiceStatusHistory, InvoiceStatus } from "@/db/schema";
 
 export type { Invoice, InvoiceItem, InvoiceStatusHistory, InvoiceStatus };
@@ -24,15 +23,3 @@ export interface KPIStats {
 }
 
 export type TabType = "processing" | "needs_review" | "approved_rejected" | "all";
-
-export const updateStatusSchema = z.object({
-  status: z.enum(["APPROVED", "REJECTED"]),
-  note: z.string().trim().max(2000).optional(),
-  actor: z.string().trim().min(1).max(100).default("Reviewer"),
-}).superRefine((value, context) => {
-  if (value.status === "REJECTED" && !value.note) {
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ["note"], message: "A rejection reason is required" });
-  }
-});
-
-export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;

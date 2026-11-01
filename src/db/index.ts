@@ -4,7 +4,9 @@ import * as schema from "./schema";
 
 const connectionString =
   process.env.DATABASE_URL ||
-  "postgres://postgres:postgrespassword@localhost:5433/invoice_desk";
+  (process.env.NODE_ENV === "production"
+    ? "postgres://unconfigured:unconfigured@127.0.0.1:1/unconfigured"
+    : "postgres://postgres:postgrespassword@localhost:5433/invoice_desk");
 
 // Prevent multiple connection pools during Next.js hot module reloading
 const globalForDb = globalThis as unknown as {

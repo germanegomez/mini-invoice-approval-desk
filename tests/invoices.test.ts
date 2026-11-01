@@ -1,15 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { updateStatusSchema } from "../src/types/invoice";
 import { calculateStats } from "../src/lib/stats";
 import { formatCurrency } from "../src/lib/utils";
-
-test("API rejection requires a meaningful reason and a bounded reviewer name", () => {
-  assert.equal(updateStatusSchema.safeParse({ status: "REJECTED", note: "   " }).success, false);
-  assert.equal(updateStatusSchema.safeParse({ status: "REJECTED", note: "Incorrect price", actor: " " }).success, false);
-  assert.equal(updateStatusSchema.safeParse({ status: "APPROVED", actor: "x".repeat(101) }).success, false);
-  assert.deepEqual(updateStatusSchema.parse({ status: "REJECTED", note: " Incorrect price " }), { status: "REJECTED", note: "Incorrect price", actor: "Reviewer" });
-});
 
 test("invoice amounts use the invoice currency", () => {
   assert.equal(formatCurrency("120.50", "EUR"), "€120.50");

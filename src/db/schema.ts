@@ -60,7 +60,6 @@ export const invoiceStatusHistory = pgTable("invoice_status_history", {
     .notNull(),
   fromStatus: varchar("from_status", { length: 30 }).$type<InvoiceStatus | null>(),
   toStatus: varchar("to_status", { length: 30 }).$type<InvoiceStatus>().notNull(),
-  actor: varchar("actor", { length: 100 }).notNull(),
   note: text("note"),
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 });

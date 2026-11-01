@@ -2,6 +2,7 @@
 
 import { FileCheck2 } from "lucide-react";
 import { ThemeToggle } from "./ui/theme-toggle";
+import { LogoutButton } from "./auth/LogoutButton";
 
 export function Header() {
   return (
@@ -16,7 +17,10 @@ export function Header() {
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Review invoices. Record decisions.</p>
           </div>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <LogoutButton />
+        </div>
       </div>
     </header>
   );

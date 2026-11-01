@@ -46,12 +46,11 @@ export async function seedDatabase({ reset = false } = {}) {
         quantity: sample.quantity.toFixed(2), unitPrice: sample.unitPrice.toFixed(2), amount: subtotal.toFixed(2),
       });
       await tx.insert(invoiceStatusHistory).values({
-        invoiceId: invoice.id, fromStatus: null, toStatus: "PROCESSING", actor: "Demo import",
+        invoiceId: invoice.id, fromStatus: null, toStatus: "PROCESSING",
         note: "Fictional invoice imported for demonstration.", createdAt: issueDate,
       });
       if (sample.status !== "PROCESSING") await tx.insert(invoiceStatusHistory).values({
         invoiceId: invoice.id, fromStatus: "PROCESSING", toStatus: sample.status,
-        actor: sample.status === "NEEDS_REVIEW" ? "Demo review queue" : "Demo reviewer",
         note: sample.note, createdAt: new Date(issueDate.getTime() + 3600000),
       });
     }
