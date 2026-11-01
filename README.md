@@ -186,6 +186,8 @@ declared peers include Next.js 16 and React 19. The lock resolves exactly
 `sha512-NnjYtjrSOAx/TIVFGTX4IfI/9yHnNpi4B7FuLUwuV20v2Zxgr2OGP/YN0ynJuI7y8QOnTBPitfOdEXZrVvhIuA==`.
 See the [official 4.24.15 release](https://github.com/nextauthjs/next-auth/releases/tag/next-auth%404.24.15)
 and [NextAuth v4 documentation](https://next-auth.js.org/getting-started/upgrade-v4).
+The cross-repository acceptance contract and remaining manual OAuth gate are
+tracked in [invoice workflow ticket #58](https://github.com/germanegomez/invoice-automation-workflow/issues/58).
 
 ## Development
 
