@@ -101,6 +101,37 @@ Keep credentials in your server or workflow environment. There is no invoice-cre
 
 ## Deployment
 
+### Production container
+
+The production image uses Next.js standalone output and is built for `linux/amd64` from the exact Node base `node:22.23.4-alpine3.24@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914`. Node 22.23.4 is an LTS security release from 2026-10-21. The multi-stage build installs the existing lockfile with pnpm 12.14.0 and copies only the traced runtime, static assets, and MIT license into the final stage.
+
+Build and run it without a database or credentials:
+
+```bash
+docker build --pull --platform linux/amd64 -t mini-invoice-approval-desk:local .
+docker run --name mini-invoice-approval-desk -p 3000:3000 mini-invoice-approval-desk:local
+```
+
+Open [localhost:3000](http://localhost:3000). The home page and `GET /api/health` work without PostgreSQL. The health endpoint reports only whether the portal process can answer HTTP; it deliberately does not query PostgreSQL, n8n, or another external service. Invoice API routes still require `DATABASE_URL` at runtime:
+
+```bash
+docker run --name mini-invoice-approval-desk -p 3000:3000 \
+  -e DATABASE_URL='postgresql://user:password@database:5432/invoice_desk' \
+  mini-invoice-approval-desk:local
+```
+
+Pass secrets only at runtime. The Docker build ignores `.env*`, `.git`, local dependencies, build output, tests, and development documentation. It does not run migrations or `pnpm db:seed`, and it does not include a PostgreSQL server.
+
+The container listens on `0.0.0.0:3000`, runs as the image's non-root `node` user, and uses the exec-form `node server.js` command so `docker stop --time 10 mini-invoice-approval-desk` delivers `SIGTERM` directly to the Next.js process. Verify the built artifact with:
+
+```bash
+pnpm container:verify -- mini-invoice-approval-desk:local
+```
+
+That check starts a disposable database-free container, verifies the image platform, non-root identity, health and home routes, excluded files, and a clean stop before the timeout. It removes the test container afterward. The image is not published by this repository, and only `linux/amd64` is currently verified. Authentication remains outside this image; do not expose it publicly without the protection described below.
+
+### Node.js process
+
 ```bash
 pnpm build
 pnpm start

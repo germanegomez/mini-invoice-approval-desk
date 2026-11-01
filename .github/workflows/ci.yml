@@ -19,3 +19,5 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: pnpm smoke
+      - run: docker build --pull --platform linux/amd64 --tag mini-invoice-approval-desk:ci .
+      - run: pnpm container:verify -- mini-invoice-approval-desk:ci

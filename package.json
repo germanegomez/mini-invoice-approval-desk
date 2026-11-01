@@ -13,7 +13,8 @@
     "db:seed": "tsx scripts/seed.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "container:verify": "node scripts/verify-container.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.6",
