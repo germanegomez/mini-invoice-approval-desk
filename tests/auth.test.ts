@@ -6,7 +6,9 @@ import { SESSION_MAX_AGE_SECONDS, validateGoogleClaims } from "../src/lib/auth/c
 import { sanitizeAuthErrorMetadata } from "../src/lib/auth/diagnostics";
 import {
   applyMinimalPortalIdentity,
+  attachPortalIdentityToOAuthAccount,
   portalUserMatchesToken,
+  readPortalIdentityFromOAuthAccount,
   validatePortalTokenClaims,
 } from "../src/lib/auth/session-claims";
 
@@ -96,6 +98,29 @@ test("issued sessions are encrypted JWE and retain only the minimum portal ident
   assert.equal(decoded?.portalUserId, "42");
   assert.equal(decoded?.authVersion, 3);
   assert.equal(decoded?.accessToken, undefined);
+});
+
+test("authorized identity survives NextAuth rebuilding the user between sign-in and JWT callbacks", () => {
+  const account = attachPortalIdentityToOAuthAccount<Record<string, unknown>>({
+    provider: "google",
+    type: "oauth",
+    access_token: "provider-token-that-must-not-be-copied",
+  }, {
+    portalUserId: "42",
+    googleSubject: "google-subject-1",
+    authVersion: 3,
+    authenticatedAt: Math.floor(Date.now() / 1000),
+  });
+
+  const rebuiltUser = { id: "google-profile-id" };
+  assert.equal("portalUserId" in rebuiltUser, false);
+  assert.deepEqual(readPortalIdentityFromOAuthAccount(account), {
+    portalUserId: "42",
+    googleSubject: "google-subject-1",
+    authVersion: 3,
+    authenticatedAt: account.authenticatedAt,
+  });
+  assert.equal(readPortalIdentityFromOAuthAccount(account)?.portalUserId, "42");
 });
 
 test("authentication diagnostics retain only bounded, sanitized cause metadata", () => {
