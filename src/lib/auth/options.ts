@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { validateGoogleClaims, SESSION_MAX_AGE_SECONDS, type GoogleOidcProfile } from "./claims";
+import { sanitizeAuthErrorMetadata } from "./diagnostics";
 import { authorizeGoogleIdentity, recordAuthRejection, recordLogout } from "./repository";
 import { applyMinimalPortalIdentity } from "./session-claims";
 
@@ -103,8 +104,8 @@ export const authOptions: NextAuthOptions = {
     },
   },
   logger: {
-    error(code) {
-      console.error("Authentication error:", code);
+    error(code, metadata) {
+      console.error("Authentication error:", code, sanitizeAuthErrorMetadata(metadata));
     },
     warn(code) {
       console.warn("Authentication warning:", code);
