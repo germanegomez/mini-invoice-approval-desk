@@ -2,15 +2,13 @@ import { randomUUID } from "node:crypto";
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { validateGoogleClaims, SESSION_MAX_AGE_SECONDS, type GoogleOidcProfile } from "./claims";
+import { sanitizeAuthErrorMetadata } from "./diagnostics";
 import { authorizeGoogleIdentity, recordAuthRejection, recordLogout } from "./repository";
-import { applyMinimalPortalIdentity } from "./session-claims";
-
-type PortalAuthUser = {
-  portalUserId?: string;
-  googleSubject?: string;
-  authVersion?: number;
-  authenticatedAt?: number;
-};
+import {
+  applyMinimalPortalIdentity,
+  attachPortalIdentityToOAuthAccount,
+  readPortalIdentityFromOAuthAccount,
+} from "./session-claims";
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
@@ -38,7 +36,7 @@ export const authOptions: NextAuthOptions = {
     error: "/access-denied",
   },
   callbacks: {
-    async signIn({ account, profile, user }) {
+    async signIn({ account, profile }) {
       const requestId = randomUUID();
       if (account?.provider !== "google" || !profile) {
         await recordAuthRejection("unsupported_provider", requestId);
@@ -58,26 +56,18 @@ export const authOptions: NextAuthOptions = {
         requestId,
       );
       if (!authorization.ok) return false;
-      Object.assign(user as PortalAuthUser, authorization.identity, {
+      attachPortalIdentityToOAuthAccount(account, {
+        ...authorization.identity,
         authenticatedAt: Math.floor(Date.now() / 1000),
       });
       return true;
     },
-    async jwt({ token, user, account }) {
-      const portalUser = user as PortalAuthUser | undefined;
-      if (
-        account?.provider === "google"
-        && portalUser?.portalUserId
-        && portalUser.googleSubject
-        && portalUser.authVersion
-        && portalUser.authenticatedAt
-      ) {
-        applyMinimalPortalIdentity(token, {
-          portalUserId: portalUser.portalUserId,
-          googleSubject: portalUser.googleSubject,
-          authVersion: portalUser.authVersion,
-          authenticatedAt: portalUser.authenticatedAt,
-        });
+    async jwt({ token, account }) {
+      const portalIdentity = account?.provider === "google"
+        ? readPortalIdentityFromOAuthAccount(account)
+        : null;
+      if (portalIdentity) {
+        applyMinimalPortalIdentity(token, portalIdentity);
       }
       return token;
     },
@@ -103,8 +93,8 @@ export const authOptions: NextAuthOptions = {
     },
   },
   logger: {
-    error(code) {
-      console.error("Authentication error:", code);
+    error(code, metadata) {
+      console.error("Authentication error:", code, sanitizeAuthErrorMetadata(metadata));
     },
     warn(code) {
       console.warn("Authentication warning:", code);

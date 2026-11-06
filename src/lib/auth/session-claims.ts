@@ -28,6 +28,21 @@ export interface IssuedPortalIdentity {
   authenticatedAt: number;
 }
 
+export function attachPortalIdentityToOAuthAccount<T extends Record<string, unknown>>(
+  account: T,
+  identity: IssuedPortalIdentity,
+): T & IssuedPortalIdentity {
+  return Object.assign(account, identity);
+}
+
+export function readPortalIdentityFromOAuthAccount(
+  account: Record<string, unknown>,
+): IssuedPortalIdentity | null {
+  const claims = validatePortalTokenClaims(account);
+  if (!claims) return null;
+  return claims;
+}
+
 export function applyMinimalPortalIdentity<T extends Record<string, unknown>>(
   token: T,
   identity: IssuedPortalIdentity,
