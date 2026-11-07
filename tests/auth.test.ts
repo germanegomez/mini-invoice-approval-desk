@@ -5,6 +5,11 @@ import type { JWT } from "next-auth/jwt";
 import { SESSION_MAX_AGE_SECONDS, validateGoogleClaims } from "../src/lib/auth/claims";
 import { sanitizeAuthErrorMetadata } from "../src/lib/auth/diagnostics";
 import {
+  auditPortalLogout,
+  authorizeGoogleSignIn,
+  type AuthLifecycleDependencies,
+} from "../src/lib/auth/lifecycle";
+import {
   applyMinimalPortalIdentity,
   attachPortalIdentityToOAuthAccount,
   portalUserMatchesToken,
@@ -20,6 +25,28 @@ const validProfile = {
   email_verified: true,
   hd: domain,
 };
+
+function lifecycleDependencies(
+  overrides: Partial<AuthLifecycleDependencies> = {},
+): AuthLifecycleDependencies {
+  return {
+    workspaceDomain: domain,
+    createRequestId: () => "synthetic-request-id",
+    nowSeconds: () => 2_000_000,
+    authorizeGoogleIdentity: async () => ({
+      ok: true,
+      identity: {
+        portalUserId: "42",
+        googleSubject: "google-subject-1",
+        authVersion: 3,
+      },
+    }),
+    recordAuthRejection: async () => undefined,
+    recordLogout: async () => undefined,
+    reportLogoutAuditFailure: () => undefined,
+    ...overrides,
+  };
+}
 
 test("Google claims require the configured Workspace domain, verified email, subject and hosted-domain claim", () => {
   assert.deepEqual(validateGoogleClaims(validProfile, domain), {
@@ -170,4 +197,126 @@ test("authentication diagnostics retain only bounded, sanitized cause metadata",
   });
   assert.equal(JSON.stringify(diagnostic).includes("must-not-be-read"), false);
   assert.equal(JSON.stringify(diagnostic).includes("secret-code"), false);
+});
+
+test("rejected Google sign-in audits only a bounded reason and request ID", async () => {
+  const rejectionCalls: unknown[][] = [];
+  let authorizationCalled = false;
+  const account = {
+    provider: "google",
+    access_token: "google-access-token-must-not-be-audited",
+    id_token: "google-id-token-must-not-be-audited",
+  };
+  const accepted = await authorizeGoogleSignIn({
+    account,
+    profile: {
+      ...validProfile,
+      email: "rejected.user@example.invalid",
+      hd: "wrong.example",
+      nonce: "claim-must-not-be-audited",
+    },
+  }, lifecycleDependencies({
+    authorizeGoogleIdentity: async () => {
+      authorizationCalled = true;
+      return { ok: false, reason: "not_preauthorized" };
+    },
+    recordAuthRejection: async (...args) => {
+      rejectionCalls.push(args);
+    },
+  }));
+
+  assert.equal(accepted, false);
+  assert.equal(authorizationCalled, false);
+  assert.deepEqual(rejectionCalls, [["wrong_hosted_domain", "synthetic-request-id"]]);
+  const serializedAudit = JSON.stringify(rejectionCalls);
+  for (const forbidden of [
+    "rejected.user",
+    "google-subject-1",
+    "google-access-token",
+    "google-id-token",
+    "claim-must-not-be-audited",
+  ]) {
+    assert.equal(serializedAudit.includes(forbidden), false);
+  }
+});
+
+test("accepted Google sign-in passes normalized identity and attaches minimal portal claims", async () => {
+  const authorizationCalls: unknown[][] = [];
+  const account = { provider: "google", type: "oauth" };
+  const accepted = await authorizeGoogleSignIn({ account, profile: validProfile }, lifecycleDependencies({
+    authorizeGoogleIdentity: async (...args) => {
+      authorizationCalls.push(args);
+      return {
+        ok: true,
+        identity: {
+          portalUserId: "42",
+          googleSubject: "google-subject-1",
+          authVersion: 3,
+        },
+      };
+    },
+  }));
+
+  assert.equal(accepted, true);
+  assert.deepEqual(authorizationCalls, [[
+    "synthetic.user@clinicacruzceleste.com",
+    "google-subject-1",
+    "synthetic-request-id",
+  ]]);
+  assert.deepEqual(account, {
+    provider: "google",
+    type: "oauth",
+    portalUserId: "42",
+    googleSubject: "google-subject-1",
+    authVersion: 3,
+    authenticatedAt: 2_000_000,
+  });
+});
+
+test("logout audit uses only local identity and reports failures generically", async () => {
+  const logoutCalls: unknown[][] = [];
+  let genericFailureCount = 0;
+  const sensitiveToken = {
+    portalUserId: "42",
+    email: "user@example.invalid",
+    accessToken: "google-access-token-must-not-be-audited",
+    refreshToken: "google-refresh-token-must-not-be-audited",
+    idToken: "google-id-token-must-not-be-audited",
+    cookie: "session-cookie-must-not-be-audited",
+  };
+
+  await auditPortalLogout(sensitiveToken, lifecycleDependencies({
+    createRequestId: () => "logout-request-id",
+    recordLogout: async (...args) => {
+      logoutCalls.push(args);
+    },
+  }));
+  assert.deepEqual(logoutCalls, [["42", "logout-request-id"]]);
+
+  await auditPortalLogout(sensitiveToken, lifecycleDependencies({
+    recordLogout: async () => {
+      throw new Error("database detail must not be logged");
+    },
+    reportLogoutAuditFailure: () => {
+      genericFailureCount += 1;
+    },
+  }));
+  await auditPortalLogout({ email: "no-local-identity@example.invalid" }, lifecycleDependencies({
+    recordLogout: async (...args) => {
+      logoutCalls.push(args);
+    },
+  }));
+
+  assert.equal(genericFailureCount, 1);
+  assert.equal(logoutCalls.length, 1);
+  const serializedAudit = JSON.stringify(logoutCalls);
+  for (const forbidden of [
+    "user@example.invalid",
+    "google-access-token",
+    "google-refresh-token",
+    "google-id-token",
+    "session-cookie",
+  ]) {
+    assert.equal(serializedAudit.includes(forbidden), false);
+  }
 });

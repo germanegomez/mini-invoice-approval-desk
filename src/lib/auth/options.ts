@@ -1,14 +1,26 @@
 import { randomUUID } from "node:crypto";
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import { validateGoogleClaims, SESSION_MAX_AGE_SECONDS, type GoogleOidcProfile } from "./claims";
+import { SESSION_MAX_AGE_SECONDS } from "./claims";
 import { sanitizeAuthErrorMetadata } from "./diagnostics";
+import { auditPortalLogout, authorizeGoogleSignIn } from "./lifecycle";
 import { authorizeGoogleIdentity, recordAuthRejection, recordLogout } from "./repository";
 import {
   applyMinimalPortalIdentity,
-  attachPortalIdentityToOAuthAccount,
   readPortalIdentityFromOAuthAccount,
 } from "./session-claims";
+
+const authLifecycleDependencies = {
+  workspaceDomain: process.env.GOOGLE_WORKSPACE_DOMAIN,
+  createRequestId: randomUUID,
+  nowSeconds: () => Math.floor(Date.now() / 1000),
+  authorizeGoogleIdentity,
+  recordAuthRejection,
+  recordLogout,
+  reportLogoutAuditFailure: () => {
+    console.error("Authentication audit unavailable during logout");
+  },
+};
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
@@ -38,30 +50,7 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async signIn({ account, profile }) {
-      const requestId = randomUUID();
-      if (account?.provider !== "google" || !profile) {
-        await recordAuthRejection("unsupported_provider", requestId);
-        return false;
-      }
-      const claims = validateGoogleClaims(
-        profile as GoogleOidcProfile,
-        process.env.GOOGLE_WORKSPACE_DOMAIN,
-      );
-      if (!claims.ok) {
-        await recordAuthRejection(claims.reason, requestId);
-        return false;
-      }
-      const authorization = await authorizeGoogleIdentity(
-        claims.email,
-        claims.subject,
-        requestId,
-      );
-      if (!authorization.ok) return false;
-      attachPortalIdentityToOAuthAccount(account, {
-        ...authorization.identity,
-        authenticatedAt: Math.floor(Date.now() / 1000),
-      });
-      return true;
+      return authorizeGoogleSignIn({ account, profile }, authLifecycleDependencies);
     },
     async jwt({ token, account }) {
       const portalIdentity = account?.provider === "google"
@@ -84,13 +73,7 @@ export const authOptions: NextAuthOptions = {
   },
   events: {
     async signOut({ token }) {
-      if (typeof token.portalUserId === "string") {
-        try {
-          await recordLogout(token.portalUserId, randomUUID());
-        } catch {
-          console.error("Authentication audit unavailable during logout");
-        }
-      }
+      await auditPortalLogout(token, authLifecycleDependencies);
     },
   },
   logger: {
