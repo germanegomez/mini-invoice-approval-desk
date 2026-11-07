@@ -1,9 +1,10 @@
 import "server-only";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { getToken } from "next-auth/jwt";
 import { loadPortalUser } from "./repository";
 import { portalUserMatchesToken, validatePortalTokenClaims } from "./session-claims";
+import { createNextAuthTokenRequest } from "./token-request";
 
 export class AuthAccessError extends Error {
   constructor(
@@ -24,9 +25,8 @@ export async function requireAuthenticatedUser(): Promise<AuthenticatedPortalUse
   if (!secret) throw new AuthAccessError(503, "Authentication is unavailable");
 
   const requestHeaders = await headers();
-  const request = {
-    headers: Object.fromEntries(requestHeaders.entries()),
-  } as unknown as Parameters<typeof getToken>[0]["req"];
+  const requestCookies = await cookies();
+  const request = createNextAuthTokenRequest(requestCookies, requestHeaders);
   const token = await getToken({
     req: request,
     secret,
