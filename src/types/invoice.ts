@@ -78,6 +78,24 @@ export interface InvoiceItem {
 
 export interface InvoiceDetail extends InvoiceSummary {
   items: InvoiceItem[];
+  task: HumanTask | null;
+}
+
+export type HumanTaskStage =
+  | "sector_approval"
+  | "direction_approval"
+  | "accounting_classification";
+
+export type HumanTaskStatus = "available" | "claimed" | "waiting_for_document";
+
+export interface HumanTask {
+  id: number;
+  stage: HumanTaskStage;
+  queueRole: string;
+  assigneeUserId: string | null;
+  status: HumanTaskStatus;
+  outcome: string | null;
+  updatedAt: string;
 }
 
 export interface InvoiceFilters {

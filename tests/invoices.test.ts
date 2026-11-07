@@ -53,7 +53,7 @@ const headerRow = {
 };
 
 const summary = mapInvoiceSummary(headerRow);
-const detail: InvoiceDetail = { ...summary, items: [] };
+const detail: InvoiceDetail = { ...summary, items: [], task: null };
 const stats: InvoiceStats = {
   totalCount: 1,
   processingStages: [{ code: "linked_duplicate", count: 1 }],
@@ -149,13 +149,14 @@ test("detail joins items to the exact current extraction revision and same scope
     subtotal_con_iva: null, centro_costo: null, sub_centro_costo: null,
     cuenta_contable: null, updated_at: "2026-11-02T10:00:00.000Z",
   };
-  const { query, calls } = queuedQuery([[headerRow], [item]]);
+  const { query, calls } = queuedQuery([[headerRow], [item], []]);
   const loaded = await getInvoiceDetail(query, invoiceIdsReadScope([41]), 41);
   assert.equal(loaded?.items[0].lineNumber, 1);
   assert.equal(loaded?.items[0].description, null);
   assert.match(calls[1].text, /portal\.wf05_invoice_items_v1/);
   assert.match(calls[1].text, /i\.extraction_revision = item\.extraction_revision/);
   assert.deepEqual(calls[1].parameters, [[41], 41, 3]);
+  assert.equal(loaded?.task, null);
 });
 
 test("stats apply the same scope and keep currencies and invalid values separate", async () => {

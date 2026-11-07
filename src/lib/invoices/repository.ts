@@ -8,6 +8,7 @@ import type {
   InvoiceItem,
   InvoiceStats,
   InvoiceSummary,
+  HumanTask,
   PreparationStatus,
   ProcessingStage,
   StageCount,
@@ -63,6 +64,16 @@ interface ItemRow extends Record<string, unknown> {
   centro_costo: string | null;
   sub_centro_costo: string | null;
   cuenta_contable: string | null;
+  updated_at: Date | string;
+}
+
+interface TaskRow extends Record<string, unknown> {
+  id: number | string;
+  stage: HumanTask["stage"];
+  queue_role: string;
+  assignee_user_id: number | string | null;
+  status: HumanTask["status"];
+  outcome: string | null;
   updated_at: Date | string;
 }
 
@@ -293,7 +304,28 @@ export async function getInvoiceDetail(
     WHERE ${itemParts.clauses.join(" AND ")}
     ORDER BY item.numero_linea
   `, itemParts.parameters);
-  return { ...mapInvoiceSummary(header), items: items.map(mapInvoiceItem) };
+  const taskRows = await query<TaskRow>(`
+    SELECT task.id, task.stage, role.code AS queue_role,
+           task.assignee_user_id, task.status, task.outcome, task.updated_at
+      FROM portal.human_tasks task
+      JOIN portal.roles role ON role.id = task.queue_role_id
+     WHERE task.universal_raw_id = $1
+       AND task.extraction_revision = $2
+       AND task.status IN ('available','claimed','waiting_for_document')
+     ORDER BY task.id DESC
+     LIMIT 1
+  `, [universalRawId, header.extraction_revision]);
+  const taskRow = taskRows[0];
+  const task: HumanTask | null = taskRow ? {
+    id: Number(taskRow.id),
+    stage: taskRow.stage,
+    queueRole: taskRow.queue_role,
+    assigneeUserId: taskRow.assignee_user_id === null ? null : String(taskRow.assignee_user_id),
+    status: taskRow.status,
+    outcome: taskRow.outcome,
+    updatedAt: iso(taskRow.updated_at),
+  } : null;
+  return { ...mapInvoiceSummary(header), items: items.map(mapInvoiceItem), task };
 }
 
 export async function getFilterOptions(
