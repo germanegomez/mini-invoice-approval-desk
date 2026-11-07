@@ -101,10 +101,10 @@ try {
   assert(stats.status === 401, `Anonymous stats API returned ${stats.status}`);
   assert(statsBody.success === false && typeof statsBody.error === "string", "Stats API lost its controlled error contract");
 
-  const mutation = await fetch(`${origin}/api/invoices/00000000-0000-0000-0000-000000000000/status`, {
+  const mutation = await fetch(`${origin}/api/invoices/41/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: "APPROVED", actor: "browser-controlled" }),
+    body: JSON.stringify({ action: "attempted-client-mutation" }),
     signal: AbortSignal.timeout(5_000),
   });
   assert(mutation.status === 401, `Anonymous mutation route returned ${mutation.status}`);

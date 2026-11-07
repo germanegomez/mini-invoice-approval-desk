@@ -1,10 +1,9 @@
 import React from "react";
-import type { InvoiceStatus } from "@/db/schema";
 import { getStatusConfig } from "@/lib/utils";
 import { AlertTriangle, Copy } from "lucide-react";
 
 interface StatusBadgeProps {
-  status: InvoiceStatus;
+  status: string;
   className?: string;
   size?: "sm" | "md";
 }

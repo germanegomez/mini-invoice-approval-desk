@@ -1,100 +1,75 @@
 "use client";
 
-import React from "react";
-import { Search, X } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
+import type { FilterOptions, PreparationStatus, ProcessingStage } from "@/types/invoice";
 
-interface FilterBarProps {
+export interface FilterState {
   search: string;
-  onSearchChange: (search: string) => void;
-  selectedVendor: string;
-  onVendorChange: (vendor: string) => void;
-  vendors: string[];
-  totalResults: number;
+  processingStage: ProcessingStage | "";
+  preparationStatus: PreparationStatus | "";
+  currency: string;
+  issueDateFrom: string;
+  issueDateTo: string;
 }
 
-export function FilterBar({
-  search,
-  onSearchChange,
-  selectedVendor,
-  onVendorChange,
-  vendors,
-  totalResults,
-}: FilterBarProps) {
-  const hasActiveFilters = search.length > 0 || (selectedVendor && selectedVendor !== "ALL");
+interface FilterBarProps {
+  value: FilterState;
+  options: FilterOptions;
+  totalResults: number;
+  onChange(value: FilterState): void;
+}
 
-  const clearFilters = () => {
-    onSearchChange("");
-    onVendorChange("ALL");
-  };
+const selectClass = "h-9 rounded-md border border-zinc-300 bg-white px-2 text-xs font-mono dark:border-zinc-700 dark:bg-zinc-950";
 
+export function FilterBar({ value, options, totalResults, onChange }: FilterBarProps) {
+  const update = (key: keyof FilterState, next: string) => onChange({ ...value, [key]: next });
+  const active = Object.values(value).some(Boolean);
   return (
-    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-lg p-2 sm:p-3 transition-colors w-full max-w-full">
-      {/* Search Input */}
-      <div className="relative flex-1 min-w-0">
-        <div className="absolute inset-y-0 left-0 pl-2.5 sm:pl-3 flex items-center pointer-events-none">
-          <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-zinc-400 dark:text-zinc-500" />
-        </div>
+    <div className="space-y-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+      <div className="grid gap-2 md:grid-cols-3">
         <input
+          aria-label="Buscar por CUIT, razón social o clave natural"
+          className={`${selectClass} md:col-span-2`}
+          maxLength={100}
+          onChange={(event) => update("search", event.target.value)}
+          placeholder="CUIT, razón social, punto de venta o comprobante"
           type="search"
-          aria-label="Search invoices by number or vendor"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search invoice # or vendor..."
-          className="block w-full pl-8 sm:pl-9 pr-7 sm:pr-8 py-1.5 sm:py-2 text-xs sm:text-sm bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 font-mono transition-colors"
+          value={value.search}
         />
-        {search && (
-          <button
-            aria-label="Clear search"
-            onClick={() => onSearchChange("")}
-            className="absolute inset-y-0 right-0 pr-2 sm:pr-2.5 flex items-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-
-      {/* Shadcn Vendor Select Dropdown */}
-      <div className="flex items-center gap-2">
-        <div className="flex-1 sm:w-60 min-w-0">
-          <Select value={selectedVendor} onValueChange={onVendorChange}>
-            <SelectTrigger aria-label="Filter by vendor" className="w-full h-8 sm:h-9 text-xs sm:text-sm">
-              <SelectValue placeholder="All Vendors" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Vendors ({vendors.length})</SelectItem>
-              {vendors.map((v) => (
-                <SelectItem key={v} value={v}>
-                  {v}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <select
+          aria-label="Estado de procesamiento"
+          className={selectClass}
+          onChange={(event) => update("processingStage", event.target.value)}
+          value={value.processingStage}
+        >
+          <option value="">Todos los estados de procesamiento</option>
+          {options.processingStages.map((status) => <option key={status} value={status}>{status}</option>)}
+        </select>
+        <select
+          aria-label="Estado de preparación"
+          className={selectClass}
+          onChange={(event) => update("preparationStatus", event.target.value)}
+          value={value.preparationStatus}
+        >
+          <option value="">Todos los estados de preparación</option>
+          {options.preparationStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+        </select>
+        <select
+          aria-label="Moneda"
+          className={selectClass}
+          onChange={(event) => update("currency", event.target.value)}
+          value={value.currency}
+        >
+          <option value="">Todas las monedas</option>
+          {options.currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+        </select>
+        <div className="grid grid-cols-2 gap-2">
+          <input aria-label="Emisión desde" className={selectClass} onChange={(event) => update("issueDateFrom", event.target.value)} type="date" value={value.issueDateFrom} />
+          <input aria-label="Emisión hasta" className={selectClass} onChange={(event) => update("issueDateTo", event.target.value)} type="date" value={value.issueDateTo} />
         </div>
-
-        {/* Clear Filter Button */}
-        {hasActiveFilters && (
-          <button
-            onClick={clearFilters}
-            className="px-2 sm:px-2.5 py-1.5 sm:py-2 text-xs font-mono text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 rounded-md border border-zinc-300 dark:border-zinc-700 transition-colors whitespace-nowrap"
-            title="Reset filters"
-          >
-            Clear
-          </button>
-        )}
       </div>
-
-      {/* Counter */}
-      <div className="hidden lg:flex items-center text-xs font-mono text-zinc-500 dark:text-zinc-400 pl-2 shrink-0">
-        <span>
-          Showing <strong className="text-zinc-900 dark:text-zinc-200 font-bold">{totalResults}</strong> invoices
-        </span>
+      <div className="flex items-center justify-between text-xs text-zinc-500">
+        <span>{totalResults} facturas en esta página</span>
+        {active && <button className="font-mono text-amber-700 hover:underline dark:text-amber-400" onClick={() => onChange({ search: "", processingStage: "", preparationStatus: "", currency: "", issueDateFrom: "", issueDateTo: "" })}>Limpiar filtros</button>}
       </div>
     </div>
   );
