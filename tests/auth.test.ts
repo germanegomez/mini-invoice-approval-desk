@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decode, encode } from "next-auth/jwt";
+import { decode, encode, getToken } from "next-auth/jwt";
 import type { JWT } from "next-auth/jwt";
 import { SESSION_MAX_AGE_SECONDS, validateGoogleClaims } from "../src/lib/auth/claims";
 import { sanitizeAuthErrorMetadata } from "../src/lib/auth/diagnostics";
@@ -11,6 +11,7 @@ import {
   readPortalIdentityFromOAuthAccount,
   validatePortalTokenClaims,
 } from "../src/lib/auth/session-claims";
+import { createNextAuthTokenRequest } from "../src/lib/auth/token-request";
 
 const domain = "clinicacruzceleste.com";
 const validProfile = {
@@ -98,6 +99,29 @@ test("issued sessions are encrypted JWE and retain only the minimum portal ident
   assert.equal(decoded?.portalUserId, "42");
   assert.equal(decoded?.authVersion, 3);
   assert.equal(decoded?.accessToken, undefined);
+});
+
+test("NextAuth reads the encrypted session from the request cookie store", async () => {
+  const secret = "synthetic-test-secret-that-is-long-enough";
+  const jwe = await encode({
+    token: {
+      portalUserId: "42",
+      googleSubject: "google-subject-1",
+      authVersion: 3,
+      authenticatedAt: Math.floor(Date.now() / 1000),
+    },
+    secret,
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  });
+  const request = createNextAuthTokenRequest(
+    { getAll: () => [{ name: "next-auth.session-token", value: jwe }] },
+    new Headers(),
+  );
+
+  const decoded = await getToken({ req: request, secret, secureCookie: false });
+  assert.equal(decoded?.portalUserId, "42");
+  assert.equal(decoded?.googleSubject, "google-subject-1");
+  assert.equal(decoded?.authVersion, 3);
 });
 
 test("authorized identity survives NextAuth rebuilding the user between sign-in and JWT callbacks", () => {

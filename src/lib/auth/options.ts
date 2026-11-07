@@ -27,6 +27,7 @@ export const authOptions: NextAuthOptions = {
         params: {
           scope: "openid email profile",
           hd: process.env.GOOGLE_WORKSPACE_DOMAIN ?? "",
+          prompt: "select_account",
         },
       },
     }),
