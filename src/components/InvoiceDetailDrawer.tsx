@@ -3,15 +3,17 @@
 import type { InvoiceDetail } from "@/types/invoice";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { StatusBadge } from "./StatusBadge";
+import { TaskActionPanel } from "./TaskActionPanel";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./ui/sheet";
 
 const display = (value: string | null | undefined) => value || "—";
 
-export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading }: {
+export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, onChanged }: {
   invoice: InvoiceDetail | null;
   open: boolean;
   onOpenChange(open: boolean): void;
   isLoading: boolean;
+  onChanged(): Promise<void> | void;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -36,6 +38,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading }: 
               <div><dt className="text-xs text-zinc-500">Clasificación</dt><dd>{invoice.classificationComplete ? "Completa" : "Pendiente"}</dd></div>
               <div><dt className="text-xs text-zinc-500">Actualizado</dt><dd>{formatDateTime(invoice.updatedAt)}</dd></div>
             </dl>
+            <TaskActionPanel invoice={invoice} key={`${invoice.universalRawId}-${invoice.extractionRevision}-${invoice.task?.updatedAt ?? "no-task"}`} onChanged={onChanged} />
             <section>
               <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-zinc-500">Ítems de la revisión vigente</h3>
               <div className="space-y-2">{invoice.items.length === 0 ? <p className="text-sm text-zinc-500">Sin ítems visibles.</p> : invoice.items.map((item) => (

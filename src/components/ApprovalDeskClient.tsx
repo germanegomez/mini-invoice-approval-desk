@@ -68,7 +68,7 @@ export function ApprovalDeskClient() {
           <button className="rounded border px-3 py-2 text-xs disabled:opacity-40" disabled={!list.data?.nextCursor} onClick={nextPage}>Siguiente</button>
         </div>
       </main>
-      <InvoiceDetailDrawer invoice={detail.data?.data ?? null} isLoading={detail.isLoading} onOpenChange={(open) => { if (!open) setSelectedId(null); }} open={selectedId !== null} />
+      <InvoiceDetailDrawer invoice={detail.data?.data ?? null} isLoading={detail.isLoading} onChanged={async () => { await Promise.all([list.refetch(), detail.refetch()]); }} onOpenChange={(open) => { if (!open) setSelectedId(null); }} open={selectedId !== null} />
     </div>
   );
 }
