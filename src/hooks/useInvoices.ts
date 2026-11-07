@@ -1,47 +1,59 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { InvoiceWithRelations, KPIStats, TabType } from "@/types/invoice";
+import type {
+  InvoiceDetail,
+  InvoiceListResponse,
+  PreparationStatus,
+  ProcessingStage,
+} from "@/types/invoice";
 
-interface InvoicesResponse {
-  success: boolean;
-  data: InvoiceWithRelations[];
-  stats: KPIStats;
-  vendors: string[];
-  error?: string;
+export interface InvoiceQueryFilters {
+  processingStage?: ProcessingStage;
+  preparationStatus?: PreparationStatus;
+  currency?: string;
+  issueDateFrom?: string;
+  issueDateTo?: string;
+  search?: string;
+  cursor?: string;
 }
 
-export function useInvoicesQuery(
-  tab: TabType,
-  search: string,
-  vendor: string
-) {
-  return useQuery<InvoicesResponse>({
-    queryKey: ["invoices", { tab, search, vendor }],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (tab) params.set("tab", tab);
-      if (search) params.set("search", search);
-      if (vendor && vendor !== "ALL") params.set("vendor", vendor);
+async function readJson<T>(response: Response): Promise<T> {
+  const body = await response.json();
+  if (!response.ok) {
+    const error = new Error(body.error || "Invoice data is unavailable");
+    Object.assign(error, { status: response.status });
+    throw error;
+  }
+  return body as T;
+}
 
-      const res = await fetch(`/api/invoices?${params.toString()}`);
-      if (!res.ok) {
-        throw new Error("Failed to load invoices");
+export function useInvoicesQuery(filters: InvoiceQueryFilters) {
+  return useQuery<InvoiceListResponse>({
+    queryKey: ["wf05-invoices", filters],
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: "25" });
+      for (const [name, value] of Object.entries(filters)) {
+        if (value) params.set(name, value);
       }
-      return res.json();
+      return readJson<InvoiceListResponse>(
+        await fetch(`/api/invoices?${params}`, { cache: "no-store" }),
+      );
     },
+    refetchOnWindowFocus: true,
+    staleTime: 0,
+    retry: false,
   });
 }
 
-export function useInvoiceDetailQuery(id: string | null | undefined) {
-  return useQuery<{ success: boolean; data: InvoiceWithRelations; error?: string }>({
-    queryKey: ["invoice", id],
-    queryFn: async () => {
-      if (!id) throw new Error("No ID provided");
-      const res = await fetch(`/api/invoices/${id}`);
-      if (!res.ok) throw new Error("Failed to load invoice details");
-      return res.json();
-    },
-    enabled: Boolean(id),
+export function useInvoiceDetailQuery(id: number | null) {
+  return useQuery<{ success: true; data: InvoiceDetail }>({
+    queryKey: ["wf05-invoice", id],
+    queryFn: async () =>
+      readJson(await fetch(`/api/invoices/${id}`, { cache: "no-store" })),
+    enabled: id !== null,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
+    retry: false,
   });
 }

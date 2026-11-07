@@ -75,6 +75,14 @@ try {
   assert.match(invoices.headers.get("cache-control") ?? "", /private/);
   assert.match(invoices.headers.get("cache-control") ?? "", /no-store/);
 
+  const mutation = await fetch(`http://127.0.0.1:${port}/api/invoices/41/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "attempted-client-mutation" }),
+    signal: AbortSignal.timeout(5_000),
+  });
+  assert.equal(mutation.status, 401);
+
   const runtime = docker([
     "exec",
     name,

@@ -1,142 +1,74 @@
 "use client";
 
-import React, { useState } from "react";
-import { Header } from "@/components/Header";
-import { KPIBar } from "@/components/KPIBar";
-import { TabsNav } from "@/components/TabsNav";
-import { FilterBar } from "@/components/FilterBar";
-import { InvoiceTable } from "@/components/InvoiceTable";
-import { InvoiceDetailDrawer } from "@/components/InvoiceDetailDrawer";
-import type { InvoiceWithRelations, KPIStats, TabType } from "@/types/invoice";
-import {
-  useInvoicesQuery,
-  useInvoiceDetailQuery,
-} from "@/hooks/useInvoices";
+import { useMemo, useState } from "react";
+import { Header } from "./Header";
+import { KPIBar } from "./KPIBar";
+import { FilterBar, type FilterState } from "./FilterBar";
+import { InvoiceTable } from "./InvoiceTable";
+import { InvoiceDetailDrawer } from "./InvoiceDetailDrawer";
+import { useInvoiceDetailQuery, useInvoicesQuery } from "@/hooks/useInvoices";
+import type { FilterOptions, InvoiceStats, InvoiceSummary } from "@/types/invoice";
+import { formatDateTime } from "@/lib/utils";
 
-const INITIAL_STATS: KPIStats = {
-  processingCount: 0,
-  processingAmount: 0,
-  needsReviewCount: 0,
-  needsReviewAmount: 0,
-  approvedCount: 0,
-  approvedAmount: 0,
-  rejectedCount: 0,
-  rejectedAmount: 0,
-  totalCount: 0,
-  totalAmount: 0,
-};
+const EMPTY_FILTERS: FilterState = { search: "", processingStage: "", preparationStatus: "", currency: "", issueDateFrom: "", issueDateTo: "" };
+const EMPTY_OPTIONS: FilterOptions = { processingStages: [], preparationStatuses: [], currencies: [] };
+const EMPTY_STATS: InvoiceStats = { totalCount: 0, processingStages: [], preparationStatuses: [], currencyTotals: [] };
 
 export function ApprovalDeskClient() {
-  const [currentTab, setCurrentTab] = useState<TabType>("processing");
-  const [search, setSearch] = useState("");
-  const [selectedVendor, setSelectedVendor] = useState("ALL");
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const [cursor, setCursor] = useState<string | undefined>();
+  const [cursorStack, setCursorStack] = useState<Array<string | undefined>>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const queryFilters = useMemo(() => ({
+    processingStage: filters.processingStage || undefined,
+    preparationStatus: filters.preparationStatus || undefined,
+    currency: filters.currency || undefined,
+    issueDateFrom: filters.issueDateFrom || undefined,
+    issueDateTo: filters.issueDateTo || undefined,
+    search: filters.search || undefined,
+    cursor,
+  }), [filters, cursor]);
+  const list = useInvoicesQuery(queryFilters);
+  const detail = useInvoiceDetailQuery(selectedId);
+  const data = list.data?.data ?? [];
 
-  // TanStack Query for invoices ledger
-  const { data: invoicesResponse, isLoading, isError, refetch } = useInvoicesQuery(
-    currentTab,
-    search,
-    selectedVendor
-  );
-
-  // TanStack Query for selected invoice detail
-  const { data: detailResponse } = useInvoiceDetailQuery(selectedInvoiceId);
-
-  const invoices = invoicesResponse?.data || [];
-  const stats = invoicesResponse?.stats || INITIAL_STATS;
-  const vendors = invoicesResponse?.vendors || [];
-
-  // Active invoice in drawer is either full detail or list item fallback
-  const activeInvoice =
-    detailResponse?.data ||
-    invoices.find((inv) => inv.id === selectedInvoiceId) ||
-    null;
-
-  const handleSelectInvoice = (invoice: InvoiceWithRelations) => {
-    setSelectedInvoiceId(invoice.id);
-    setIsDrawerOpen(true);
+  const changeFilters = (next: FilterState) => {
+    setFilters(next);
+    setCursor(undefined);
+    setCursorStack([]);
   };
-
-  const handleCloseDrawer = () => {
-    setIsDrawerOpen(false);
+  const selectInvoice = (invoice: InvoiceSummary) => setSelectedId(invoice.universalRawId);
+  const nextPage = () => {
+    if (!list.data?.nextCursor) return;
+    setCursorStack((stack) => [...stack, cursor]);
+    setCursor(list.data.nextCursor);
+  };
+  const previousPage = () => {
+    setCursorStack((stack) => {
+      const next = [...stack];
+      setCursor(next.pop());
+      return next;
+    });
   };
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col transition-colors duration-150">
-      {/* Top Header */}
+    <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <Header />
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3.5 sm:py-8 space-y-3.5 sm:space-y-6">
-        {/* Toast Alert */}
-        {toastMessage && (
-          <div className="p-2.5 sm:p-3 rounded-lg bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-mono flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-200">
-            <span>{toastMessage}</span>
-            <button
-              onClick={() => setToastMessage(null)}
-              className="text-emerald-600 dark:text-emerald-400 hover:opacity-75 ml-4 font-bold"
-            >
-              &times;
-            </button>
-          </div>
-        )}
-
-        {/* Top KPI Stats Bar */}
-        <section aria-label="Key Performance Indicators" className="w-full">
-          <KPIBar stats={stats} />
-        </section>
-
-        {/* Tabs and Invoice Ledger */}
-        <div className="space-y-2.5 sm:space-y-4 pt-1 sm:pt-2 w-full">
-          {/* Tabs */}
-          <TabsNav
-            currentTab={currentTab}
-            onTabChange={(tab) => {
-              setCurrentTab(tab);
-            }}
-            stats={stats}
-          />
-
-          {/* Search & Filter Toolbar with Shadcn Select */}
-          <FilterBar
-            search={search}
-            onSearchChange={setSearch}
-            selectedVendor={selectedVendor}
-            onVendorChange={setSelectedVendor}
-            vendors={vendors}
-            totalResults={invoices.length}
-          />
-
-          {/* Invoices List / Table */}
-          <section aria-label="Invoice List" className="w-full">
-            {isError ? (
-              <div role="alert" className="rounded-xl border border-rose-500/30 p-6 text-sm text-center">
-                <p>Unable to load invoices. Check the database connection and try again.</p>
-                <button onClick={() => void refetch()} className="mt-3 underline underline-offset-4">Try again</button>
-              </div>
-            ) : <InvoiceTable
-              invoices={invoices}
-              onSelectInvoice={handleSelectInvoice}
-              selectedInvoiceId={selectedInvoiceId}
-              isLoading={isLoading}
-            />}
-          </section>
+      <main className="mx-auto max-w-7xl space-y-5 px-3 py-5 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><h1 className="text-xl font-bold">Facturas WF05</h1><p className="text-xs text-zinc-500">Read model de solo lectura · revisión vigente</p></div>
+          <div className="flex items-center gap-3 text-xs text-zinc-500"><span>Actualizado: {list.data ? formatDateTime(list.data.lastUpdatedAt) : "—"}</span><button className="rounded-md border border-zinc-300 px-3 py-2 font-mono hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900" onClick={() => list.refetch()}>Actualizar</button></div>
+        </div>
+        <KPIBar stats={list.data?.stats ?? EMPTY_STATS} />
+        <FilterBar onChange={changeFilters} options={list.data?.filterOptions ?? EMPTY_OPTIONS} totalResults={data.length} value={filters} />
+        {list.isError && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm">{list.error.message}</div>}
+        <InvoiceTable invoices={data} isLoading={list.isLoading} onSelectInvoice={selectInvoice} selectedInvoiceId={selectedId} />
+        <div className="flex justify-end gap-2">
+          <button className="rounded border px-3 py-2 text-xs disabled:opacity-40" disabled={cursorStack.length === 0} onClick={previousPage}>Anterior</button>
+          <button className="rounded border px-3 py-2 text-xs disabled:opacity-40" disabled={!list.data?.nextCursor} onClick={nextPage}>Siguiente</button>
         </div>
       </main>
-
-      {/* Slide-over Detail Drawer with Radix/Shadcn Sheet */}
-      <InvoiceDetailDrawer
-        invoice={activeInvoice}
-        isOpen={isDrawerOpen}
-        onClose={handleCloseDrawer}
-      />
-
-      {/* Footer */}
-      <footer className="border-t border-zinc-200 dark:border-zinc-900 bg-white/70 dark:bg-zinc-950/80 py-3.5 sm:py-4 text-center text-[11px] sm:text-xs font-mono text-zinc-500 dark:text-zinc-600 transition-colors px-3">
-        <p>Mini Invoice Approval Desk &bull; Built by <a className="underline underline-offset-4" href="https://github.com/mussaddiqmahmood7">Mussaddiq Mahmood</a></p>
-      </footer>
+      <InvoiceDetailDrawer invoice={detail.data?.data ?? null} isLoading={detail.isLoading} onOpenChange={(open) => { if (!open) setSelectedId(null); }} open={selectedId !== null} />
     </div>
   );
 }

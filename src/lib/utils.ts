@@ -1,6 +1,5 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import type { InvoiceStatus } from "@/db/schema";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -46,42 +45,41 @@ export function formatDateTime(date: Date | string | null | undefined): string {
   }).format(d);
 }
 
-export function getStatusConfig(status: InvoiceStatus) {
+export function getStatusConfig(status: string) {
   switch (status) {
-    case "PROCESSING":
+    case "processed":
+    case "posted":
       return {
-        label: "Processing",
-        bg: "bg-sky-500/10 text-sky-400 border-sky-500/30",
-        dot: "bg-sky-400",
-        badgeBg: "bg-sky-500/15",
-      };
-    case "NEEDS_REVIEW":
-      return {
-        label: "Needs Review",
-        bg: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-        dot: "bg-amber-400 animate-pulse",
-        badgeBg: "bg-amber-500/15",
-      };
-    case "APPROVED":
-      return {
-        label: "Approved",
-        bg: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+        label: status.replace(/_/g, " "),
+        bg: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
         dot: "bg-emerald-400",
-        badgeBg: "bg-emerald-500/15",
       };
-    case "REJECTED":
+    case "requires_human_review":
+    case "awaiting_classification":
+    case "extracted":
       return {
-        label: "Rejected",
-        bg: "bg-rose-500/10 text-rose-400 border-rose-500/30",
+        label: status.replace(/_/g, " "),
+        bg: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
+        dot: "bg-amber-400 animate-pulse",
+      };
+    case "linked_duplicate":
+      return {
+        label: "linked duplicate",
+        bg: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
+        dot: "bg-amber-400",
+      };
+    case "rejected":
+    case "error":
+      return {
+        label: status.replace(/_/g, " "),
+        bg: "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30",
         dot: "bg-rose-400",
-        badgeBg: "bg-rose-500/15",
       };
     default:
       return {
-        label: status,
-        bg: "bg-zinc-800 text-zinc-300 border-zinc-700",
-        dot: "bg-zinc-400",
-        badgeBg: "bg-zinc-800",
+        label: status.replace(/_/g, " "),
+        bg: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30",
+        dot: "bg-sky-400",
       };
   }
 }
