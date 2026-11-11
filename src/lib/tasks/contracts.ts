@@ -55,7 +55,15 @@ export const replacementSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 }).strict();
 
+export const continuationSchema = z.object({
+  humanOutcomeId: z.number().int().positive(),
+  expectedRevision: z.number().int().positive(),
+  idempotencyKey: idempotencyKeySchema,
+  contractVersion: z.literal(1),
+}).strict();
+
 export type TaskActionInput = z.infer<typeof taskActionSchema>;
 export type ClassificationInput = z.infer<typeof classificationSchema>;
 export type StartCircuitInput = z.infer<typeof startCircuitSchema>;
 export type ReplacementInput = z.infer<typeof replacementSchema>;
+export type ContinuationInput = z.infer<typeof continuationSchema>;

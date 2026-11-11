@@ -3,10 +3,12 @@ import { NextResponse } from "next/server";
 import type { AuthenticatedPortalUser } from "@/lib/auth/guard";
 import {
   classificationSchema,
+  continuationSchema,
   replacementSchema,
   startCircuitSchema,
   taskActionSchema,
   type ClassificationInput,
+  type ContinuationInput,
   type ReplacementInput,
   type StartCircuitInput,
   type TaskActionInput,
@@ -19,6 +21,7 @@ export interface TaskControllerDependencies {
   classify(actor: string, taskId: number, input: ClassificationInput): Promise<TaskOperationResult>;
   start(actor: string, input: StartCircuitInput): Promise<TaskOperationResult>;
   link(actor: string, input: ReplacementInput): Promise<TaskOperationResult>;
+  enqueue(actor: string, input: ContinuationInput): Promise<TaskOperationResult>;
   catalogs(): Promise<ClassificationCatalogs>;
 }
 
@@ -79,6 +82,13 @@ export async function handleReplacement(request: Request, dependencies: TaskCont
   try {
     const user = await dependencies.authenticate();
     return operationResponse(await dependencies.link(user.id, replacementSchema.parse(await json(request))));
+  } catch (error) { return errorResponse(error); }
+}
+
+export async function handleContinuation(request: Request, dependencies: TaskControllerDependencies) {
+  try {
+    const user = await dependencies.authenticate();
+    return operationResponse(await dependencies.enqueue(user.id, continuationSchema.parse(await json(request))));
   } catch (error) { return errorResponse(error); }
 }
 
