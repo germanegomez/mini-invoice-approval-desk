@@ -3,6 +3,7 @@ import "server-only";
 import { postgresQuery } from "@/lib/invoices/server-repository";
 import {
   getClassificationCatalogs,
+  enqueueContinuation,
   linkReplacement,
   performTaskAction,
   saveTaskClassification,
@@ -18,5 +19,7 @@ export const taskServerRepository = {
     startHumanCircuit(postgresQuery, actor, input),
   link: (actor: string, input: Parameters<typeof linkReplacement>[2]) =>
     linkReplacement(postgresQuery, actor, input),
+  enqueue: (actor: string, input: Parameters<typeof enqueueContinuation>[2]) =>
+    enqueueContinuation(postgresQuery, actor, input),
   catalogs: () => getClassificationCatalogs(postgresQuery),
 };

@@ -1,6 +1,7 @@
 import type { QueryExecutor } from "@/lib/invoices/repository";
 import type {
   ClassificationInput,
+  ContinuationInput,
   ReplacementInput,
   StartCircuitInput,
   TaskActionInput,
@@ -12,6 +13,8 @@ export interface TaskOperationResult {
   result: string;
   taskId?: number;
   nextTaskId?: number | null;
+  operationId?: string;
+  operationStatus?: string;
 }
 
 interface ResultRow extends Record<string, unknown> {
@@ -88,6 +91,20 @@ export async function linkReplacement(
     ) AS result
   `, [actorUserId, input.originalUniversalRawId, input.replacementUniversalRawId,
     input.linkType, input.sectorRole, input.reason, input.idempotencyKey]);
+  return normalize(rows[0]);
+}
+
+export async function enqueueContinuation(
+  query: QueryExecutor,
+  actorUserId: string,
+  input: ContinuationInput,
+): Promise<TaskOperationResult> {
+  const rows = await query<ResultRow>(`
+    SELECT portal.enqueue_wf05_continuation(
+      $1::bigint, $2::bigint, $3::integer, $4::uuid, $5::integer
+    ) AS result
+  `, [actorUserId, input.humanOutcomeId, input.expectedRevision,
+    input.idempotencyKey, input.contractVersion]);
   return normalize(rows[0]);
 }
 

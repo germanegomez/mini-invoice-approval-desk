@@ -9,6 +9,8 @@ import type {
   InvoiceStats,
   InvoiceSummary,
   HumanTask,
+  HumanOutcome,
+  Wf05Continuation,
   PreparationStatus,
   ProcessingStage,
   StageCount,
@@ -75,6 +77,26 @@ interface TaskRow extends Record<string, unknown> {
   status: HumanTask["status"];
   outcome: string | null;
   updated_at: Date | string;
+}
+
+interface OutcomeRow extends Record<string, unknown> {
+  id: number | string;
+  outcome: HumanOutcome["outcome"];
+  source_task_id: number | string;
+  created_at: Date | string;
+}
+
+interface ContinuationRow extends Record<string, unknown> {
+  id: string;
+  contract_version: number;
+  status: Wf05Continuation["status"];
+  attempts: number;
+  result: Record<string, unknown> | string | null;
+  error_code: string | null;
+  error_detail: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+  completed_at: Date | string | null;
 }
 
 const HEADER_COLUMNS = `
@@ -325,7 +347,38 @@ export async function getInvoiceDetail(
     outcome: taskRow.outcome,
     updatedAt: iso(taskRow.updated_at),
   } : null;
-  return { ...mapInvoiceSummary(header), items: items.map(mapInvoiceItem), task };
+  const outcomeRows = await query<OutcomeRow>(`
+    SELECT id, outcome, source_task_id, created_at
+      FROM portal.human_outcomes
+     WHERE universal_raw_id = $1 AND extraction_revision = $2
+     ORDER BY id DESC LIMIT 1
+  `, [universalRawId, header.extraction_revision]);
+  const outcomeRow = outcomeRows[0];
+  const humanOutcome: HumanOutcome | null = outcomeRow ? {
+    id: Number(outcomeRow.id), outcome: outcomeRow.outcome,
+    sourceTaskId: Number(outcomeRow.source_task_id), createdAt: iso(outcomeRow.created_at),
+  } : null;
+  const continuationRows = await query<ContinuationRow>(`
+    SELECT id, contract_version, status, attempts, result, error_code, error_detail,
+           created_at, updated_at, completed_at
+      FROM portal.wf05_continuation_operations
+     WHERE universal_raw_id = $1 AND extraction_revision = $2
+     ORDER BY created_at DESC LIMIT 1
+  `, [universalRawId, header.extraction_revision]);
+  const continuationRow = continuationRows[0];
+  const continuation: Wf05Continuation | null = continuationRow ? {
+    id: continuationRow.id,
+    contractVersion: Number(continuationRow.contract_version),
+    status: continuationRow.status,
+    attempts: Number(continuationRow.attempts),
+    result: typeof continuationRow.result === "string" ? JSON.parse(continuationRow.result) : continuationRow.result,
+    errorCode: continuationRow.error_code,
+    errorDetail: continuationRow.error_detail,
+    createdAt: iso(continuationRow.created_at),
+    updatedAt: iso(continuationRow.updated_at),
+    completedAt: continuationRow.completed_at === null ? null : iso(continuationRow.completed_at),
+  } : null;
+  return { ...mapInvoiceSummary(header), items: items.map(mapInvoiceItem), task, humanOutcome, continuation };
 }
 
 export async function getFilterOptions(

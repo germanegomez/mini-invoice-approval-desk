@@ -2,19 +2,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   classificationSchema,
+  continuationSchema,
   replacementSchema,
   startCircuitSchema,
   taskActionSchema,
 } from "../src/lib/tasks/contracts";
 import {
   getClassificationCatalogs,
+  enqueueContinuation,
   linkReplacement,
   performTaskAction,
   saveTaskClassification,
   startHumanCircuit,
 } from "../src/lib/tasks/repository";
 import type { QueryExecutor } from "../src/lib/invoices/repository";
-import { handleClassification, handleTaskAction, type TaskControllerDependencies } from "../src/lib/tasks/controller";
+import { handleClassification, handleContinuation, handleTaskAction, type TaskControllerDependencies } from "../src/lib/tasks/controller";
 
 const key = "00000000-0000-4000-8000-000000000061";
 
@@ -44,6 +46,8 @@ test("classification validates bounded per-item fields and replacement preserves
     { lineNumber: 1, costCenter: "CC-2", subCostCenter: null, accountingAccount: null },
   ] }));
   assert.equal(replacementSchema.parse({ originalUniversalRawId: 41, replacementUniversalRawId: 42, linkType: "credit_note", sectorRole: "billing", reason: "Documento sintético", idempotencyKey: key }).linkType, "credit_note");
+  assert.equal(continuationSchema.parse({ humanOutcomeId: 8, expectedRevision: 3, idempotencyKey: key, contractVersion: 1 }).contractVersion, 1);
+  assert.throws(() => continuationSchema.parse({ humanOutcomeId: 8, expectedRevision: 3, idempotencyKey: key, contractVersion: 2, actor: "browser" }));
 });
 
 test("repository calls only allowlisted portal functions with session actor", async () => {
@@ -52,15 +56,18 @@ test("repository calls only allowlisted portal functions with session actor", as
     [{ result: { ok: true, status: 200, result: "accepted", taskId: 9 } }],
     [{ result: { ok: true, status: 201, result: "created", taskId: 10 } }],
     [{ result: { ok: true, status: 200, result: "linked", taskId: 11 } }],
+    [{ result: { ok: true, status: 202, result: "enqueued", operationId: key } }],
   ]);
   await performTaskAction(query, "7", 9, { expectedRevision: 3, action: "claim_task", idempotencyKey: key });
   await saveTaskClassification(query, "7", 9, { expectedRevision: 3, idempotencyKey: key, complete: false, items: [{ lineNumber: 1, costCenter: null, subCostCenter: null, accountingAccount: null }] });
   await startHumanCircuit(query, "7", { universalRawId: 41, expectedRevision: 3, sectorRole: "purchasing", idempotencyKey: key });
   await linkReplacement(query, "7", { originalUniversalRawId: 41, replacementUniversalRawId: 42, linkType: "corrected_invoice", sectorRole: "purchasing", reason: "synthetic", idempotencyKey: key });
+  await enqueueContinuation(query, "7", { humanOutcomeId: 8, expectedRevision: 3, idempotencyKey: key, contractVersion: 1 });
   assert.match(calls[0].text, /portal\.perform_task_action/);
   assert.match(calls[1].text, /portal\.save_task_classification/);
   assert.match(calls[2].text, /portal\.start_human_circuit/);
   assert.match(calls[3].text, /portal\.link_replacement_and_restart/);
+  assert.match(calls[4].text, /portal\.enqueue_wf05_continuation/);
   assert.equal(calls.every((call) => call.parameters[0] === "7"), true);
   assert.equal(calls.some((call) => /n8n|payment|txt|etl/i.test(call.text)), false);
 });
@@ -85,6 +92,7 @@ function dependencies(overrides: Partial<TaskControllerDependencies> = {}): Task
     classify: async () => ({ ok: true, status: 200, result: "accepted", taskId: 9 }),
     start: async () => ({ ok: true, status: 201, result: "created", taskId: 9 }),
     link: async () => ({ ok: true, status: 200, result: "linked", taskId: 9 }),
+    enqueue: async () => ({ ok: true, status: 202, result: "enqueued", operationId: key }),
     catalogs: async () => ({ costCenters: [], subCostCenters: [], accounts: [] }),
     ...overrides,
   };
@@ -110,4 +118,17 @@ test("classification controller preserves conflict status without external side 
   assert.equal(response.status, 409);
   assert.equal((await response.json()).result, "classification_incomplete");
   assert.match(response.headers.get("cache-control") ?? "", /private, no-store/);
+});
+
+test("continuation controller derives actor from the session and rejects contract drift", async () => {
+  const calls: unknown[][] = [];
+  const accepted = await handleContinuation(new Request("http://portal/api/continuations", {
+    method: "POST", body: JSON.stringify({ humanOutcomeId: 8, expectedRevision: 3, idempotencyKey: key, contractVersion: 1 }),
+  }), dependencies({ enqueue: async (...args) => { calls.push(args); return { ok: true, status: 202, result: "enqueued" }; } }));
+  assert.equal(accepted.status, 202);
+  assert.equal(calls[0][0], "7");
+  const rejected = await handleContinuation(new Request("http://portal/api/continuations", {
+    method: "POST", body: JSON.stringify({ humanOutcomeId: 8, expectedRevision: 3, idempotencyKey: key, contractVersion: 2, actor: "8" }),
+  }), dependencies());
+  assert.equal(rejected.status, 400);
 });
