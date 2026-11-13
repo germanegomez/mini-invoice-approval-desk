@@ -67,7 +67,7 @@ test("repository calls only allowlisted portal functions with session actor", as
   assert.match(calls[1].text, /portal\.save_task_classification/);
   assert.match(calls[2].text, /portal\.start_human_circuit/);
   assert.match(calls[3].text, /portal\.link_replacement_and_restart/);
-  assert.match(calls[4].text, /portal\.enqueue_wf05_continuation/);
+  assert.match(calls[4].text, /portal\.enqueue_post_approval_job/);
   assert.equal(calls.every((call) => call.parameters[0] === "7"), true);
   assert.equal(calls.some((call) => /n8n|payment|txt|etl/i.test(call.text)), false);
 });

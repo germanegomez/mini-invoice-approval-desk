@@ -80,7 +80,7 @@ export interface InvoiceDetail extends InvoiceSummary {
   items: InvoiceItem[];
   task: HumanTask | null;
   humanOutcome: HumanOutcome | null;
-  continuation: Wf05Continuation | null;
+  continuation: PostApprovalJob | null;
 }
 
 export type HumanTaskStage =
@@ -102,19 +102,19 @@ export interface HumanTask {
 
 export interface HumanOutcome {
   id: number;
-  outcome: "ready_for_wf05_continuation" | "rejected_final" | "cancelled_internal" | "exception_closed";
+  outcome: "ready_for_post_approval_processing" | "rejected_final" | "cancelled_internal" | "exception_closed";
   sourceTaskId: number;
   createdAt: string;
 }
 
-export type Wf05ContinuationStatus =
+export type PostApprovalJobStatus =
   | "pending" | "claimed" | "running" | "retryable"
   | "completed" | "failed" | "superseded";
 
-export interface Wf05Continuation {
+export interface PostApprovalJob {
   id: string;
   contractVersion: number;
-  status: Wf05ContinuationStatus;
+  status: PostApprovalJobStatus;
   attempts: number;
   result: Record<string, unknown> | null;
   errorCode: string | null;

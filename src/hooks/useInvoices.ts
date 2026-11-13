@@ -30,7 +30,7 @@ async function readJson<T>(response: Response): Promise<T> {
 
 export function useInvoicesQuery(filters: InvoiceQueryFilters) {
   return useQuery<InvoiceListResponse>({
-    queryKey: ["wf05-invoices", filters],
+    queryKey: ["invoices", filters],
     queryFn: async () => {
       const params = new URLSearchParams({ limit: "25" });
       for (const [name, value] of Object.entries(filters)) {
@@ -48,7 +48,7 @@ export function useInvoicesQuery(filters: InvoiceQueryFilters) {
 
 export function useInvoiceDetailQuery(id: number | null) {
   return useQuery<{ success: true; data: InvoiceDetail }>({
-    queryKey: ["wf05-invoice", id],
+    queryKey: ["invoice", id],
     queryFn: async () =>
       readJson(await fetch(`/api/invoices/${id}`, { cache: "no-store" })),
     enabled: id !== null,

@@ -127,7 +127,7 @@ test("list query uses the read view, ID scope and deterministic keyset without O
   const page = await listInvoices(query, invoiceIdsReadScope([41, 55]), { limit: 1 });
   assert.equal(page.data.length, 1);
   assert.ok(page.nextCursor);
-  assert.match(calls[0].text, /portal\.wf05_invoices_v1/);
+  assert.match(calls[0].text, /portal\.invoices_v1/);
   assert.match(calls[0].text, /updated_at DESC, i\.universal_raw_id DESC/);
   assert.doesNotMatch(calls[0].text, /OFFSET/i);
   assert.deepEqual(calls[0].parameters[0], [41, 55]);
@@ -155,7 +155,7 @@ test("detail joins items to the exact current extraction revision and same scope
   const loaded = await getInvoiceDetail(query, invoiceIdsReadScope([41]), 41);
   assert.equal(loaded?.items[0].lineNumber, 1);
   assert.equal(loaded?.items[0].description, null);
-  assert.match(calls[1].text, /portal\.wf05_invoice_items_v1/);
+  assert.match(calls[1].text, /portal\.invoice_items_v1/);
   assert.match(calls[1].text, /i\.extraction_revision = item\.extraction_revision/);
   assert.deepEqual(calls[1].parameters, [[41], 41, 3]);
   assert.equal(loaded?.task, null);
@@ -242,7 +242,7 @@ test("audit SQL stores only actor, invoice ID, bounded result and request ID", a
   assert.doesNotMatch(calls[0].text, /cuit|importe|filter|document|reason/i);
 });
 
-test("UI renders integer identity, current revision and real WF05 states", () => {
+test("UI renders integer identity, current revision and real invoice processing states", () => {
   const html = renderToStaticMarkup(
     createElement(InvoiceTable, {
       invoices: [summary as InvoiceSummary],

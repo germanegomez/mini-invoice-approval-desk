@@ -10,7 +10,7 @@ export function KPIBar({ stats }: { stats: InvoiceStats }) {
         <p className="text-xs text-zinc-500">facturas visibles</p>
       </div>
       <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/70">
-        <p className="text-xs font-mono uppercase text-zinc-500">Procesamiento WF05</p>
+        <p className="text-xs font-mono uppercase text-zinc-500">Procesamiento de facturas</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {stats.processingStages.map((entry) => <span className="rounded border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-[11px] font-mono" key={entry.code}>{entry.code}: {entry.count}</span>)}
         </div>

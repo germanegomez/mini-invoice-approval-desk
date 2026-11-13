@@ -19,7 +19,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent>
         <SheetHeader className="border-b border-zinc-200 p-5 dark:border-zinc-800">
-          <SheetTitle>Detalle WF05 {invoice ? `#${invoice.universalRawId}` : ""}</SheetTitle>
+          <SheetTitle>Detalle de factura {invoice ? `#${invoice.universalRawId}` : ""}</SheetTitle>
           <SheetDescription>Lectura de la revisión vigente. No se expone historial ni documento fuente.</SheetDescription>
         </SheetHeader>
         <div className="flex-1 space-y-5 overflow-y-auto p-5">

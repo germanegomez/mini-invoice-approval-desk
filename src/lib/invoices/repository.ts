@@ -10,7 +10,7 @@ import type {
   InvoiceSummary,
   HumanTask,
   HumanOutcome,
-  Wf05Continuation,
+  PostApprovalJob,
   PreparationStatus,
   ProcessingStage,
   StageCount,
@@ -89,7 +89,7 @@ interface OutcomeRow extends Record<string, unknown> {
 interface ContinuationRow extends Record<string, unknown> {
   id: string;
   contract_version: number;
-  status: Wf05Continuation["status"];
+  status: PostApprovalJob["status"];
   attempts: number;
   result: Record<string, unknown> | string | null;
   error_code: string | null;
@@ -263,7 +263,7 @@ export async function listInvoices(
   const limit = pushParameter(parts, filters.limit + 1);
   const rows = await query<HeaderRow>(`
     SELECT ${HEADER_COLUMNS}
-      FROM portal.wf05_invoices_v1 i
+      FROM portal.invoices_v1 i
      WHERE ${parts.clauses.join(" AND ")}
      ORDER BY i.updated_at DESC, i.universal_raw_id DESC
      LIMIT ${limit}
@@ -288,7 +288,7 @@ export async function getInvoiceDetail(
   headerParts.clauses.push(`i.universal_raw_id = ${pushParameter(headerParts, universalRawId)}`);
   const headers = await query<HeaderRow>(`
     SELECT ${HEADER_COLUMNS}
-      FROM portal.wf05_invoices_v1 i
+      FROM portal.invoices_v1 i
      WHERE ${headerParts.clauses.join(" AND ")}
      LIMIT 1
   `, headerParts.parameters);
@@ -319,8 +319,8 @@ export async function getInvoiceDetail(
       item.sub_centro_costo,
       item.cuenta_contable,
       item.updated_at
-    FROM portal.wf05_invoice_items_v1 item
-    JOIN portal.wf05_invoices_v1 i
+    FROM portal.invoice_items_v1 item
+    JOIN portal.invoices_v1 i
       ON i.universal_raw_id = item.universal_raw_id
      AND i.extraction_revision = item.extraction_revision
     WHERE ${itemParts.clauses.join(" AND ")}
@@ -348,7 +348,8 @@ export async function getInvoiceDetail(
     updatedAt: iso(taskRow.updated_at),
   } : null;
   const outcomeRows = await query<OutcomeRow>(`
-    SELECT id, outcome, source_task_id, created_at
+    SELECT id, CASE WHEN outcome = 'ready_for_wf05_continuation'
+      THEN 'ready_for_post_approval_processing' ELSE outcome END AS outcome, source_task_id, created_at
       FROM portal.human_outcomes
      WHERE universal_raw_id = $1 AND extraction_revision = $2
      ORDER BY id DESC LIMIT 1
@@ -361,12 +362,12 @@ export async function getInvoiceDetail(
   const continuationRows = await query<ContinuationRow>(`
     SELECT id, contract_version, status, attempts, result, error_code, error_detail,
            created_at, updated_at, completed_at
-      FROM portal.wf05_continuation_operations
+      FROM portal.post_approval_jobs_v1
      WHERE universal_raw_id = $1 AND extraction_revision = $2
      ORDER BY created_at DESC LIMIT 1
   `, [universalRawId, header.extraction_revision]);
   const continuationRow = continuationRows[0];
-  const continuation: Wf05Continuation | null = continuationRow ? {
+  const continuation: PostApprovalJob | null = continuationRow ? {
     id: continuationRow.id,
     contractVersion: Number(continuationRow.contract_version),
     status: continuationRow.status,
@@ -391,19 +392,19 @@ export async function getFilterOptions(
   const [stages, preparations, currencies] = await Promise.all([
     query<{ value: ProcessingStage }>(`
       SELECT DISTINCT i.processing_stage AS value
-        FROM portal.wf05_invoices_v1 i
+        FROM portal.invoices_v1 i
        WHERE ${stageParts.clauses.join(" AND ")}
        ORDER BY value
     `, stageParts.parameters),
     query<{ value: PreparationStatus }>(`
       SELECT DISTINCT i.preparation_status AS value
-        FROM portal.wf05_invoices_v1 i
+        FROM portal.invoices_v1 i
        WHERE ${preparationParts.clauses.join(" AND ")}
        ORDER BY value
     `, preparationParts.parameters),
     query<{ value: string }>(`
       SELECT DISTINCT i.moneda AS value
-        FROM portal.wf05_invoices_v1 i
+        FROM portal.invoices_v1 i
        WHERE ${currencyParts.clauses.join(" AND ")} AND i.moneda ~ '^[A-Z]{3}$'
        ORDER BY value
     `, currencyParts.parameters),
@@ -441,14 +442,14 @@ export async function getInvoiceStats(
   const [processingRows, preparationRows, currencyRows] = await Promise.all([
     query<CountRow>(`
       SELECT i.processing_stage AS code, count(*)::bigint AS count
-        FROM portal.wf05_invoices_v1 i
+        FROM portal.invoices_v1 i
        WHERE ${processingParts.clauses.join(" AND ")}
        GROUP BY i.processing_stage
        ORDER BY i.processing_stage
     `, processingParts.parameters),
     query<CountRow>(`
       SELECT i.preparation_status AS code, count(*)::bigint AS count
-        FROM portal.wf05_invoices_v1 i
+        FROM portal.invoices_v1 i
        WHERE ${preparationParts.clauses.join(" AND ")}
        GROUP BY i.preparation_status
        ORDER BY i.preparation_status
@@ -472,7 +473,7 @@ export async function getInvoiceStats(
              OR i.importe_total IS NULL
              OR i.importe_total !~ '^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$'
         )::bigint AS excluded_count
-      FROM portal.wf05_invoices_v1 i
+      FROM portal.invoices_v1 i
       WHERE ${currencyParts.clauses.join(" AND ")}
       GROUP BY i.moneda
       ORDER BY i.moneda NULLS LAST
@@ -505,6 +506,6 @@ export async function recordInvoiceDetailAudit(
   await query(`
     INSERT INTO portal.audit_events(
       actor_user_id, action, resource_type, resource_id, result, request_id
-    ) VALUES ($1::bigint, 'invoice.detail.read', 'wf05_invoice', $2::text, $3, $4)
+    ) VALUES ($1::bigint, 'invoice.detail.read', 'invoice', $2::text, $3, $4)
   `, [actorUserId, universalRawId, result, requestId]);
 }
