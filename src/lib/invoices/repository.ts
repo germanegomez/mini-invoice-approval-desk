@@ -348,9 +348,8 @@ export async function getInvoiceDetail(
     updatedAt: iso(taskRow.updated_at),
   } : null;
   const outcomeRows = await query<OutcomeRow>(`
-    SELECT id, CASE WHEN outcome = 'ready_for_wf05_continuation'
-      THEN 'ready_for_post_approval_processing' ELSE outcome END AS outcome, source_task_id, created_at
-      FROM portal.human_outcomes
+    SELECT id, outcome, source_task_id, created_at
+      FROM portal.invoice_outcomes_v1
      WHERE universal_raw_id = $1 AND extraction_revision = $2
      ORDER BY id DESC LIMIT 1
   `, [universalRawId, header.extraction_revision]);
