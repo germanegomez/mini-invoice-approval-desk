@@ -1,9 +1,9 @@
-# WF05 portal application contract
+# invoice processing portal application contract
 
 This application consumes the V021 read model owned by
 `germanegomez/invoice-automation-workflow`. The database role has `SELECT` on
-the two `portal.wf05_*_v1` views and no direct read or write privilege on their
-underlying WF05 tables. Application SQL names every projected column and maps
+the two `portal.invoice_*_v1` views and no direct read or write privilege on their
+underlying invoice processing tables. Application SQL names every projected column and maps
 rows into explicit camel-case DTOs.
 
 ## Authorization
@@ -30,7 +30,7 @@ Accepted list parameters are:
 
 | Parameter | Validation |
 | --- | --- |
-| `processingStage` | Exact value from the WF05 database constraint |
+| `processingStage` | Exact value from the invoice processing database constraint |
 | `preparationStatus` | `extracted`, `awaiting_classification`, `classified`, or `posted` |
 | `currency` | Three uppercase ASCII letters |
 | `issueDateFrom`, `issueDateTo` | Real canonical `YYYY-MM-DD` dates with a non-inverted range |
@@ -45,14 +45,14 @@ reapplied independently on every page.
 ## Responses and freshness
 
 List and detail DTOs expose only fields present in V021's allowlist. The UI
-shows integer `universal_raw_id`, current `extraction_revision`, both real WF05
+shows integer `universal_raw_id`, current `extraction_revision`, both real invoice processing
 statuses, nullable canonical fields, and currency-aware amounts. It does not
 show the demo four-state model or claim a revision history.
 
 List, detail, statistics, and filter options use `private, no-store` responses.
 The client refetches manually and on window focus and displays its last query
 time. Because the source is a regular view, the next query observes committed
-WF05 changes; keyset pagination does not promise a permanent snapshot.
+invoice processing changes; keyset pagination does not promise a permanent snapshot.
 
 Statistics count real states within the same scope. Decimal text is aggregated
 only when it is canonical and has a canonical currency, grouped by that
@@ -68,4 +68,4 @@ content, filter string, CUIT, amount, source document, OAuth material, or claim.
 
 The status route remains disabled. This change does not run inherited demo
 migrations or seeds, apply V021 to a persistent volume, change an n8n workflow,
-execute or activate WF05, publish an image, or deploy the portal.
+execute or activate invoice processing, publish an image, or deploy the portal.

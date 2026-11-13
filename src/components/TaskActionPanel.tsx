@@ -60,7 +60,7 @@ export function TaskActionPanel({ invoice, onChanged }: {
     finally { setBusy(false); }
   };
 
-  const continueWf05 = async () => {
+  const processApprovedInvoice = async () => {
     if (!invoice.humanOutcome) return;
     setBusy(true); setMessage(null);
     try {
@@ -70,7 +70,7 @@ export function TaskActionPanel({ invoice, onChanged }: {
         idempotencyKey: crypto.randomUUID(),
         contractVersion: 1,
       });
-      setMessage("Continuación WF05 encolada."); await onChanged();
+      setMessage("Factura aprobada encolada para procesamiento."); await onChanged();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Error"); }
     finally { setBusy(false); }
   };
@@ -78,11 +78,11 @@ export function TaskActionPanel({ invoice, onChanged }: {
   if (!task) return <section className="space-y-3 rounded-lg border p-3 text-sm">
     <div><h3 className="text-sm font-bold">Resultado humano</h3><p className="text-zinc-500">{invoice.humanOutcome?.outcome ?? "No hay una tarea humana abierta para esta revisión."}</p></div>
     {invoice.continuation ? <div className="rounded border p-3">
-      <h4 className="text-xs font-bold uppercase tracking-wide text-zinc-500">Operación técnica WF05</h4>
+      <h4 className="text-xs font-bold uppercase tracking-wide text-zinc-500">Procesamiento posterior a la aprobación</h4>
       <p className="mt-1 font-mono text-xs">{invoice.continuation.status} · intento {invoice.continuation.attempts}/3</p>
       {invoice.continuation.errorCode && <p className="mt-1 text-xs text-rose-600">{invoice.continuation.errorCode}: {invoice.continuation.errorDetail}</p>}
-    </div> : invoice.humanOutcome?.outcome === "ready_for_wf05_continuation" ?
-      <button disabled={busy} className="rounded bg-emerald-600 px-3 py-2 text-xs font-bold text-white" onClick={continueWf05}>Continuar WF05</button> :
+    </div> : invoice.humanOutcome?.outcome === "ready_for_post_approval_processing" ?
+      <button disabled={busy} className="rounded bg-emerald-600 px-3 py-2 text-xs font-bold text-white" onClick={processApprovedInvoice}>Procesar factura aprobada</button> :
       !invoice.humanOutcome && <div className="flex flex-wrap items-end gap-2">
         <label className="text-xs">Sector inicial<select className="ml-2 rounded border bg-transparent p-2" value={sectorRole} onChange={(event) => setSectorRole(event.target.value as typeof sectorRole)}><option value="purchasing">Compras</option><option value="maintenance">Mantenimiento</option><option value="billing">Facturación</option></select></label>
         <button disabled={busy} className="rounded bg-amber-500 px-3 py-2 text-xs font-bold text-black" onClick={startCircuit}>Iniciar circuito</button>

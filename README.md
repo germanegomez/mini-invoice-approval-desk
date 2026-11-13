@@ -1,6 +1,6 @@
 # Mini Invoice Approval Desk
 
-A self-hosted, read-only interface for the current WF05 invoice revision. It is
+A self-hosted, read-only interface for the current invoice processing invoice revision. It is
 built with Next.js, TypeScript, PostgreSQL, TanStack Query, and Tailwind CSS.
 
 The portal authenticates preauthorized Google Workspace users, but a valid
@@ -9,15 +9,15 @@ resolver returns `none` until ticket #61 implements approved roles, tasks, and
 assignments. Approval, rejection, classification changes, and every other
 invoice mutation remain disabled.
 
-## WF05 read contract
+## invoice processing read contract
 
 The runtime reads only these regular, allowlisted PostgreSQL views:
 
-- `portal.wf05_invoices_v1`
-- `portal.wf05_invoice_items_v1`
+- `portal.invoices_v1`
+- `portal.invoice_items_v1`
 
 They expose the current `universal_raw_id + extraction_revision` selected by
-WF05. The portal does not query the underlying public tables, copy invoices,
+invoice processing. The portal does not query the underlying public tables, copy invoices,
 load a historical revision, expose source documents, or use the original demo
 tables at runtime. Raw OCR/Docling content, LLM material, evidence, complete
 JSON objects, hashes, transport identifiers, source references, URLs, and
@@ -30,13 +30,13 @@ scope return the same `404` as missing or superseded records. Detail successes
 and denials are audited using only the local actor ID, invoice ID, bounded
 result, and request ID.
 
-See [docs/wf05-read-model.md](docs/wf05-read-model.md) for filters, cursor,
+See [docs/invoice-read-model.md](docs/invoice-read-model.md) for filters, cursor,
 statistics, freshness, and security boundaries.
 
 ## Development
 
 Requires Node.js 22+ and pnpm 12.14.0. The database must already contain the
-portal authentication contract through V020 and the WF05 read model in V021
+portal authentication contract through V020 and the invoice processing read model in V021
 from `germanegomez/invoice-automation-workflow`.
 
 ```bash
@@ -53,8 +53,8 @@ server-only database and OAuth values. Never commit real identities or secrets.
 The build does not need those values.
 
 The inherited Drizzle demo migration, push, and seed commands are not part of
-the WF05 integration and must not be run against the shared database. This
-application does not own portal or WF05 schema migrations.
+the invoice processing integration and must not be run against the shared database. This
+application does not own portal or invoice processing schema migrations.
 
 ## API
 
@@ -78,7 +78,7 @@ rows by default, and 100 maximum. The cursor is opaque, versioned, canonical,
 and strictly validated. It is not an authorization token. A row updated between
 requests can move because the read model intentionally has no persistent cache.
 
-Statistics retain real WF05 processing and preparation codes. Monetary values
+Statistics retain real invoice processing processing and preparation codes. Monetary values
 are aggregated only inside each ISO currency. Null or non-canonical amounts are
 counted as excluded and never coerced or combined across currencies.
 
@@ -97,7 +97,7 @@ pnpm container:verify -- mini-invoice-approval-desk:local
 `/api/health` and `/login` remain available without PostgreSQL. Protected
 requests require the authentication database; invoice responses additionally
 require a configured read scope. Building or running the image does not migrate
-a database, activate WF05, call n8n, or deploy anything.
+a database, activate invoice processing, call n8n, or deploy anything.
 
 ## Authentication
 

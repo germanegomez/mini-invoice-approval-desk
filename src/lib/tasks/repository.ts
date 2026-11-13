@@ -100,7 +100,7 @@ export async function enqueueContinuation(
   input: ContinuationInput,
 ): Promise<TaskOperationResult> {
   const rows = await query<ResultRow>(`
-    SELECT portal.enqueue_wf05_continuation(
+    SELECT portal.enqueue_post_approval_job(
       $1::bigint, $2::bigint, $3::integer, $4::uuid, $5::integer
     ) AS result
   `, [actorUserId, input.humanOutcomeId, input.expectedRevision,

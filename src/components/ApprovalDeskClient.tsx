@@ -56,7 +56,7 @@ export function ApprovalDeskClient() {
       <Header />
       <main className="mx-auto max-w-7xl space-y-5 px-3 py-5 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h1 className="text-xl font-bold">Facturas WF05</h1><p className="text-xs text-zinc-500">Read model de solo lectura · revisión vigente</p></div>
+          <div><h1 className="text-xl font-bold">Facturas</h1><p className="text-xs text-zinc-500">Read model de solo lectura · revisión vigente</p></div>
           <div className="flex items-center gap-3 text-xs text-zinc-500"><span>Actualizado: {list.data ? formatDateTime(list.data.lastUpdatedAt) : "—"}</span><button className="rounded-md border border-zinc-300 px-3 py-2 font-mono hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900" onClick={() => list.refetch()}>Actualizar</button></div>
         </div>
         <KPIBar stats={list.data?.stats ?? EMPTY_STATS} />

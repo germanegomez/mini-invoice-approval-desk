@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 
 function naturalKey(invoice: InvoiceSummary): string {
   const parts = [invoice.pointOfSale, invoice.documentNumber].filter(Boolean);
-  return parts.length ? parts.join("-") : `WF05-${invoice.universalRawId}`;
+  return parts.length ? parts.join("-") : `Factura #${invoice.universalRawId}`;
 }
 
 export function InvoiceTable({ invoices, selectedInvoiceId, onSelectInvoice, isLoading }: {
