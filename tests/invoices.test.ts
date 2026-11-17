@@ -16,6 +16,7 @@ import {
   allInvoiceReadScope,
   invoiceIdsReadScope,
   noInvoiceReadScope,
+  resolvedInvoiceReadScope,
 } from "../src/lib/invoices/scope";
 import {
   handleInvoiceDetail,
@@ -109,7 +110,37 @@ test("scope variants normalize IDs and never default to all", () => {
   assert.deepEqual(noInvoiceReadScope(), { kind: "none" });
   assert.deepEqual(allInvoiceReadScope(), { kind: "all" });
   assert.deepEqual(invoiceIdsReadScope([41, 41, -1, 0, 55]), { kind: "ids", universalRawIds: [41, 55] });
-  assert.deepEqual(invoiceIdsReadScope([]), { kind: "none" });
+  assert.deepEqual(invoiceIdsReadScope([]), { kind: "ids", universalRawIds: [] });
+});
+
+test("resolved scope contract preserves all, configured empty IDs and none", () => {
+  assert.deepEqual(
+    resolvedInvoiceReadScope([{ scope_kind: "all", universal_raw_id: null }]),
+    allInvoiceReadScope(),
+  );
+  assert.deepEqual(
+    resolvedInvoiceReadScope([{ scope_kind: "ids", universal_raw_id: null }]),
+    invoiceIdsReadScope([]),
+  );
+  assert.deepEqual(
+    resolvedInvoiceReadScope([
+      { scope_kind: "ids", universal_raw_id: "41" },
+      { scope_kind: "ids", universal_raw_id: 55 },
+    ]),
+    invoiceIdsReadScope([41, 55]),
+  );
+  assert.deepEqual(
+    resolvedInvoiceReadScope([{ scope_kind: "none", universal_raw_id: null }]),
+    noInvoiceReadScope(),
+  );
+  assert.throws(() => resolvedInvoiceReadScope([]), /Invalid invoice scope contract/);
+  assert.throws(() => resolvedInvoiceReadScope([
+    { scope_kind: "all", universal_raw_id: null },
+    { scope_kind: "ids", universal_raw_id: 41 },
+  ]), /Invalid invoice scope contract/);
+  assert.throws(() => resolvedInvoiceReadScope([
+    { scope_kind: "ids", universal_raw_id: "invalid" },
+  ]), /Invalid invoice scope contract/);
 });
 
 test("DTO mapping excludes raw, LLM, source and document fields", () => {
@@ -132,6 +163,14 @@ test("list query uses the read view, ID scope and deterministic keyset without O
   assert.doesNotMatch(calls[0].text, /OFFSET/i);
   assert.deepEqual(calls[0].parameters[0], [41, 55]);
   assert.equal(calls[0].parameters.at(-1), 2);
+});
+
+test("configured empty ID scope produces a false server-side filter, never global access", async () => {
+  const { query, calls } = queuedQuery([[]]);
+  const page = await listInvoices(query, invoiceIdsReadScope([]), { limit: 25 });
+  assert.deepEqual(page.data, []);
+  assert.match(calls[0].text, /universal_raw_id = ANY/);
+  assert.deepEqual(calls[0].parameters[0], []);
 });
 
 test("search remains parameterized and escapes SQL wildcard characters", async () => {
@@ -188,6 +227,47 @@ test("authenticated users without configured scope receive 403 before list queri
   assert.equal(response.status, 403);
   assert.equal(queried, false);
   assert.equal(response.headers.get("cache-control"), "private, no-store, max-age=0");
+});
+
+test("authorized all and configured empty ID scopes return an empty dashboard payload", async () => {
+  for (const scope of [allInvoiceReadScope(), invoiceIdsReadScope([])]) {
+    const received: unknown[] = [];
+    const response = await handleInvoiceList(
+      new Request("http://portal.local/api/invoices"),
+      dependencies({
+        resolveScope: async () => scope,
+        list: async (value) => { received.push(value); return { data: [], nextCursor: null }; },
+        filterOptions: async (value) => { received.push(value); return { processingStages: [], preparationStatuses: [], currencies: [] }; },
+        stats: async (value) => { received.push(value); return { totalCount: 0, processingStages: [], preparationStatuses: [], currencyTotals: [] }; },
+      }),
+    );
+    assert.equal(response.status, 200);
+    assert.deepEqual(received, [scope, scope, scope]);
+    assert.deepEqual((await response.json()).data, []);
+  }
+});
+
+test("invalid sessions and scope repository failures remain closed and sanitized", async () => {
+  const invalidSession = await handleInvoiceList(
+    new Request("http://portal.local/api/invoices"),
+    dependencies({
+      authenticate: async () => { throw Object.assign(new Error("private identity detail"), { status: 401 }); },
+    }),
+  );
+  assert.equal(invalidSession.status, 401);
+  assert.equal(JSON.stringify(await invalidSession.json()).includes("private identity detail"), false);
+
+  let queried = false;
+  const repositoryFailure = await handleInvoiceList(
+    new Request("http://portal.local/api/invoices"),
+    dependencies({
+      resolveScope: async () => { throw new Error("private database detail"); },
+      list: async () => { queried = true; return { data: [], nextCursor: null }; },
+    }),
+  );
+  assert.equal(repositoryFailure.status, 500);
+  assert.equal(queried, false);
+  assert.equal(JSON.stringify(await repositoryFailure.json()).includes("private database detail"), false);
 });
 
 test("list, filter options and indicators receive the exact same server scope", async () => {
@@ -256,4 +336,18 @@ test("UI renders integer identity, current revision and real invoice processing 
   assert.match(html, /linked duplicate/i);
   assert.match(html, /classified/i);
   assert.doesNotMatch(html, /APPROVED|NEEDS_REVIEW/);
+});
+
+test("UI renders an authorized empty inbox without authorization details", () => {
+  const html = renderToStaticMarkup(
+    createElement(InvoiceTable, {
+      invoices: [],
+      isLoading: false,
+      onSelectInvoice: () => undefined,
+      selectedInvoiceId: null,
+    }),
+  );
+  assert.match(html, /Bandeja vacía/);
+  assert.match(html, /No hay facturas disponibles/);
+  assert.doesNotMatch(html, /access.denied|correo|subject|token|claim/i);
 });

@@ -15,7 +15,14 @@ export function InvoiceTable({ invoices, selectedInvoiceId, onSelectInvoice, isL
   isLoading: boolean;
 }) {
   if (isLoading) return <div className="rounded-xl border p-10 text-center text-sm text-zinc-500">Cargando facturas…</div>;
-  if (invoices.length === 0) return <div className="rounded-xl border p-10 text-center text-sm text-zinc-500">No hay facturas para el alcance y filtros actuales.</div>;
+  if (invoices.length === 0) return (
+    <section aria-label="Bandeja vacía" className="rounded-xl border p-10 text-center">
+      <h2 className="text-base font-semibold">Bandeja vacía</h2>
+      <p className="mt-2 text-sm text-zinc-500">
+        No hay facturas disponibles para revisar en este momento.
+      </p>
+    </section>
+  );
   return (
     <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/60">
       <Table>
