@@ -1,5 +1,9 @@
 "use client";
 
+import { useRef, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { ClassificationEditor, type DraftHandle } from "./ClassificationEditor";
+import { secondaryButton } from "./BulkClassification";
 import type { InvoiceDetail } from "@/types/invoice";
 import { currencyLabel, formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { StatusBadge, DuplicateBadge } from "./StatusBadge";
@@ -8,19 +12,34 @@ import { InvoiceHistoryTimeline } from "./InvoiceHistoryTimeline";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "./ui/sheet";
 import { FileText, X } from "lucide-react";
 
-export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, onChanged }: {
+export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, onChanged, onDirtyChange }: {
   invoice: InvoiceDetail | null;
   open: boolean;
   onOpenChange(open: boolean): void;
   isLoading: boolean;
+  onDirtyChange(dirty: boolean): void;
   onChanged(): Promise<void> | void;
 }) {
-  const onClose = () => onOpenChange(false);
+  const editor = useRef<DraftHandle>(null);
+  const [nextAction, setNextAction] = useState<(() => void) | null>(null);
+  const [saving, setSaving] = useState(false);
+  function guard(action: () => void) {
+    if (editor.current?.busy) return;
+    if (editor.current?.dirty) setNextAction(() => action);
+    else action();
+  }
+  const onClose = () => guard(() => onOpenChange(false));
+  const accounting = invoice?.task?.stage === "accounting_classification";
+  const canEdit = accounting && invoice.allowedActions.some(action => action === "classification.save" || action === "classification.complete");
+  const taskPanel = invoice && <TaskActionPanel key={invoice.task?.id ?? "none"} invoice={invoice} guard={guard} onChanged={onChanged} />;
   const money = (value: string | null) => invoice?.currency ? formatCurrency(value, invoice.currency) : "—";
 
   return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
+      <Sheet open={open} onOpenChange={value => { if (!value) onClose(); }}>
         <SheetContent
+          onEscapeKeyDown={event => {
+            if (document.activeElement?.matches('input[role="combobox"][aria-expanded="true"]')) event.preventDefault();
+          }}
           side="right"
           className="top-0 right-0 h-[100dvh] max-h-[100dvh] w-full sm:max-w-xl md:max-w-2xl bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col p-0 overflow-hidden"
         >
@@ -86,8 +105,9 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
               </div>
             </div>
 
-            {/* Line Items Breakdown */}
-            <div className="space-y-2 sm:space-y-3">
+            {accounting && taskPanel}
+            {canEdit ? <ClassificationEditor key={[invoice.universalRawId, invoice.extractionRevision, invoice.task?.id].join("-")}
+              ref={editor} invoice={invoice} onChanged={onChanged} onDirtyChange={onDirtyChange} /> : <div className="space-y-2 sm:space-y-3">
               <h3 className="text-[11px] sm:text-xs font-mono uppercase tracking-wider font-bold text-zinc-500 dark:text-zinc-400">
                 Itemized Line Items ({invoice.items?.length || 0})
               </h3>
@@ -109,7 +129,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
                           <tr key={item.lineNumber} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
                             <td className="py-2 pl-3 pr-2 text-zinc-800 dark:text-zinc-200 font-sans text-[11px] sm:text-xs">
                               {item.description ?? "—"}
-                              <small className="block text-zinc-500">{[item.code,item.unit,item.vatCategory,item.vatRate].filter(Boolean).join(" · ")}</small>
+                              <small className="block text-zinc-500">{["Línea " + item.lineNumber,item.code,item.unit,item.vatCategory,item.vatRate].filter(Boolean).join(" · ")}</small>
                               <small className="block text-zinc-500">{[item.costCenter,item.subCostCenter,item.accountingAccount].filter(Boolean).join(" · ")}</small>
                             </td>
                             <td className="px-2 py-2 text-right text-zinc-600 dark:text-zinc-400 tabular-nums">
@@ -138,8 +158,8 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
                   <span>Total</span><span>{money(invoice.totalAmount)}</span>
                 </div>
               </div>
-            </div>
-            <TaskActionPanel key={`${invoice.universalRawId}-${invoice.extractionRevision}-${invoice.task?.updatedAt ?? "none"}`} invoice={invoice} onChanged={onChanged} />
+            </div>}
+            {!accounting && taskPanel}
             <InvoiceHistoryTimeline events={invoice.history} currentRevision={invoice.extractionRevision} />
             <details className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 text-xs font-mono">
               <summary className="cursor-pointer">Detalle técnico</summary>
@@ -156,6 +176,26 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
               </dl>
             </details>
           </div>}
+          <Dialog.Root open={nextAction !== null} onOpenChange={value => { if (!value && !saving) setNextAction(null); }}>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/50" />
+              <Dialog.Content className="fixed left-1/2 top-1/2 z-[61] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 space-y-3 rounded-xl border border-zinc-300 bg-white p-4 text-zinc-900 shadow-xl dark:border-zinc-700 dark:bg-zinc-900 dark:text-white">
+                <Dialog.Title className="font-bold">Cambios sin guardar</Dialog.Title>
+                <Dialog.Description className="text-sm">Podés guardar la clasificación en borrador antes de continuar.</Dialog.Description>
+                <div className="flex flex-wrap gap-2">
+                  <button className={secondaryButton} disabled={saving} onClick={() => setNextAction(null)}>Seguir editando</button>
+                  {invoice?.allowedActions.includes("classification.save") && <button className={secondaryButton} disabled={saving} onClick={async () => {
+                    setSaving(true);
+                    const saved = await editor.current?.save();
+                    setSaving(false); setNextAction(null); if (saved) nextAction?.();
+                  }}>Guardar y continuar</button>}
+                  <button className={secondaryButton} disabled={saving} onClick={() => {
+                    editor.current?.discard(); setNextAction(null); nextAction?.();
+                  }}>Descartar y continuar</button>
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
         </SheetContent>
       </Sheet>
   );

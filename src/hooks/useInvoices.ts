@@ -49,13 +49,14 @@ export function useInvoicesQuery(filters: InvoiceQueryFilters) {
   });
 }
 
-export function useInvoiceDetailQuery(id: number | null) {
+export function useInvoiceDetailQuery(id: number | null, editing = false) {
   return useQuery<{ success: true; data: InvoiceDetail }>({
     queryKey: ["invoice", id],
     queryFn: async () =>
       readJson(await fetch(`/api/invoices/${id}`, { cache: "no-store" })),
     enabled: id !== null,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: !editing,
+    refetchOnReconnect: !editing,
     staleTime: 0,
     retry: false,
   });

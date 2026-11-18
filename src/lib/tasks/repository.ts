@@ -110,7 +110,7 @@ export async function enqueueContinuation(
 
 export interface ClassificationCatalogs {
   costCenters: Array<{ code: string; displayName: string }>;
-  subCostCenters: Array<{ costCenterCode: string; code: string; displayName: string }>;
+  subCostCenters: Array<{ code: string; displayName: string }>;
   accounts: Array<{ code: string; displayName: string }>;
 }
 
@@ -120,10 +120,10 @@ export async function getClassificationCatalogs(query: QueryExecutor): Promise<C
       SELECT code, display_name FROM portal.classification_cost_centers
        WHERE active ORDER BY code
     `, []),
-    query<{ cost_center_code: string; code: string; display_name: string }>(`
-      SELECT cost_center_code, code, display_name
+    query<{ code: string; display_name: string }>(`
+      SELECT code, display_name
         FROM portal.classification_subcost_centers WHERE active
-       ORDER BY cost_center_code, code
+       ORDER BY code
     `, []),
     query<{ code: string; display_name: string }>(`
       SELECT code, display_name FROM portal.classification_accounts
@@ -133,7 +133,7 @@ export async function getClassificationCatalogs(query: QueryExecutor): Promise<C
   return {
     costCenters: costCenters.map((row) => ({ code: row.code, displayName: row.display_name })),
     subCostCenters: subCostCenters.map((row) => ({
-      costCenterCode: row.cost_center_code, code: row.code, displayName: row.display_name,
+      code: row.code, displayName: row.display_name,
     })),
     accounts: accounts.map((row) => ({ code: row.code, displayName: row.display_name })),
   };

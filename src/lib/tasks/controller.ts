@@ -22,7 +22,7 @@ export interface TaskControllerDependencies {
   start(actor: string, input: StartCircuitInput): Promise<TaskOperationResult>;
   link(actor: string, input: ReplacementInput): Promise<TaskOperationResult>;
   enqueue(actor: string, input: ContinuationInput): Promise<TaskOperationResult>;
-  catalogs(): Promise<ClassificationCatalogs>;
+  catalogs(actor: string): Promise<ClassificationCatalogs | null>;
 }
 
 const PRIVATE_HEADERS = { "Cache-Control": "private, no-store, max-age=0", Vary: "Cookie" };
@@ -94,7 +94,8 @@ export async function handleContinuation(request: Request, dependencies: TaskCon
 
 export async function handleCatalogs(dependencies: TaskControllerDependencies) {
   try {
-    await dependencies.authenticate();
-    return privateJson({ success: true, data: await dependencies.catalogs() });
+    const actor = await dependencies.authenticate();
+    const data = await dependencies.catalogs(actor.id);
+    return data ? privateJson({ success: true, data }) : privateJson({ success: false, error: "Access denied" }, { status: 403 });
   } catch (error) { return errorResponse(error); }
 }

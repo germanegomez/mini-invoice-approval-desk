@@ -401,7 +401,15 @@ export async function getInvoiceDetail(
     updatedAt: iso(continuationRow.updated_at),
     completedAt: continuationRow.completed_at === null ? null : iso(continuationRow.completed_at),
   } : null;
-  const permissions = await query<PermissionRow>(`
+  const permissions = await readActorPermissions(query, actor);
+  const history = await readInvoiceHistory(query, scope, universalRawId);
+  const invoice = { ...mapInvoiceSummary(header), items: items.map(mapInvoiceItem), task, humanOutcome, continuation, history };
+  const sourceAssignee = outcomeRow?.source_assignee;
+  return { ...invoice, allowedActions: availableActions(invoice, actor, permissions, sourceAssignee == null ? null : String(sourceAssignee)) };
+}
+
+export function readActorPermissions(query: QueryExecutor, actor: string) {
+  return query<PermissionRow>(`
     SELECT role.code AS role, permission.code AS permission
       FROM portal.users u
       JOIN portal.user_roles member ON member.user_id = u.id
@@ -410,10 +418,6 @@ export async function getInvoiceDetail(
       JOIN portal.permissions permission ON permission.id = bundle.permission_id AND permission.active
      WHERE u.id = $1 AND u.enabled
   `, [actor]);
-  const history = await readInvoiceHistory(query, scope, universalRawId);
-  const invoice = { ...mapInvoiceSummary(header), items: items.map(mapInvoiceItem), task, humanOutcome, continuation, history };
-  const sourceAssignee = outcomeRow?.source_assignee;
-  return { ...invoice, allowedActions: availableActions(invoice, actor, permissions, sourceAssignee == null ? null : String(sourceAssignee)) };
 }
 
 export async function getFilterOptions(

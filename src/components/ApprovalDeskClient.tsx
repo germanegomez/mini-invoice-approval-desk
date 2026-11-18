@@ -29,7 +29,8 @@ export function ApprovalDeskClient() {
     ...filters, processingStage: filters.processingStage || undefined,
     preparationStatus: filters.preparationStatus || undefined,
   });
-  const detail = useInvoiceDetailQuery(selectedId);
+  const [editing, setEditing] = useState(false);
+  const detail = useInvoiceDetailQuery(selectedId, editing);
   const data = list.data;
   const rows = data?.data ?? [];
   const groups = data?.stats.categories ?? [];
@@ -71,7 +72,7 @@ export function ApprovalDeskClient() {
           </nav>}
         </div>
       </main>
-      <InvoiceDetailDrawer invoice={detail.data?.data ?? null} isLoading={detail.isLoading} open={selectedId !== null}
+      <InvoiceDetailDrawer onDirtyChange={setEditing} invoice={detail.data?.data ?? null} isLoading={detail.isLoading} open={selectedId !== null}
         onOpenChange={open => { if (!open) select(null); }}
         onChanged={async () => { await Promise.all([list.refetch(), detail.refetch()]); }} />
       {/* Footer */}

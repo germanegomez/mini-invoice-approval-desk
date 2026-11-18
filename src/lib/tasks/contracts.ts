@@ -22,22 +22,26 @@ export const taskActionSchema = z.object({
   resolutionCode: z.enum(["advance_to_direction", "close_internal"]).optional(),
 }).strict();
 
-const classificationItemSchema = z.object({
-  lineNumber: z.number().int().positive(),
+const assignmentSchema = z.object({
   costCenter: z.string().trim().max(100).nullable(),
   subCostCenter: z.string().trim().max(100).nullable(),
   accountingAccount: z.string().trim().max(100).nullable(),
 }).strict();
 
+const classificationItemSchema = assignmentSchema.extend({
+  lineNumber: z.number().int().positive(),
+  expected: assignmentSchema.optional(),
+});
+
 export const classificationSchema = z.object({
   expectedRevision: z.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
   complete: z.boolean(),
-  items: z.array(classificationItemSchema).min(1).max(500).refine(
+  items: z.array(classificationItemSchema).max(500).refine(
     (items) => new Set(items.map((item) => item.lineNumber)).size === items.length,
     "Duplicate line number",
   ),
-}).strict();
+}).strict().refine(input => input.complete || input.items.length > 0, "Draft requires changes");
 
 export const startCircuitSchema = z.object({
   universalRawId: z.number().int().positive(),

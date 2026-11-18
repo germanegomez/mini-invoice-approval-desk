@@ -1,5 +1,6 @@
 import "server-only";
 
+import { readActorPermissions } from "@/lib/invoices/repository";
 import { postgresQuery } from "@/lib/invoices/server-repository";
 import {
   getClassificationCatalogs,
@@ -21,5 +22,9 @@ export const taskServerRepository = {
     linkReplacement(postgresQuery, actor, input),
   enqueue: (actor: string, input: Parameters<typeof enqueueContinuation>[2]) =>
     enqueueContinuation(postgresQuery, actor, input),
-  catalogs: () => getClassificationCatalogs(postgresQuery),
+  catalogs: async (actor: string) => {
+    const permissions = await readActorPermissions(postgresQuery, actor);
+    if (!permissions.some(row => row.permission === "classification.save" || row.permission === "classification.complete")) return null;
+    return getClassificationCatalogs(postgresQuery);
+  },
 };

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import type { HumanOutcome, InvoiceDetail } from "@/types/invoice";
-import type { ClassificationCatalogs } from "@/lib/tasks/repository";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 const reviewResults: Record<HumanOutcome["outcome"], string> = {
@@ -11,13 +10,6 @@ const reviewResults: Record<HumanOutcome["outcome"], string> = {
   cancelled_internal: "Factura anulada internamente",
   exception_closed: "Revisión cerrada por excepción",
 };
-
-interface ItemDraft {
-  lineNumber: number;
-  costCenter: string;
-  subCostCenter: string;
-  accountingAccount: string;
-}
 
 async function request(path: string, method: string, body: unknown) {
   const response = await fetch(path, {
@@ -30,8 +22,9 @@ async function request(path: string, method: string, body: unknown) {
   return payload;
 }
 
-export function TaskActionPanel({ invoice, onChanged }: {
+export function TaskActionPanel({ invoice, onChanged, guard = action => action() }: {
   invoice: InvoiceDetail;
+  guard?(action: () => void): void;
   onChanged(): Promise<void> | void;
 }) {
   const task = invoice.task;
@@ -39,24 +32,8 @@ export function TaskActionPanel({ invoice, onChanged }: {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [catalogs, setCatalogs] = useState<ClassificationCatalogs | null>(null);
   const sectorId = useId();
   const [sectorRole, setSectorRole] = useState("purchasing");
-  const [drafts, setDrafts] = useState<ItemDraft[]>(() => invoice.items.map((item) => ({
-    lineNumber: item.lineNumber,
-    costCenter: item.costCenter ?? "",
-    subCostCenter: item.subCostCenter ?? "",
-    accountingAccount: item.accountingAccount ?? "",
-  })));
-
-  useEffect(() => {
-    if (task?.stage !== "accounting_classification" || !invoice.allowedActions.some(code => code.startsWith("classification."))) return;
-    void fetch("/api/classification-catalogs", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((payload) => { if (payload.success) setCatalogs(payload.data); })
-      .catch(() => setMessage("No se pudo cargar el catálogo."));
-  }, [task?.stage, invoice.allowedActions]);
-
   const startCircuit = async () => {
     setBusy(true); setMessage(null);
     try {
@@ -132,59 +109,28 @@ export function TaskActionPanel({ invoice, onChanged }: {
     finally { setBusy(false); }
   };
 
-  const classify = async (complete: boolean) => {
-    setBusy(true); setMessage(null);
-    try {
-      await request(`/api/tasks/${task.id}/classification`, "PATCH", {
-        expectedRevision: invoice.extractionRevision,
-        idempotencyKey: crypto.randomUUID(),
-        complete,
-        items: drafts.map((item) => ({
-          lineNumber: item.lineNumber,
-          costCenter: item.costCenter.trim() || null,
-          subCostCenter: item.subCostCenter.trim() || null,
-          accountingAccount: item.accountingAccount.trim() || null,
-        })),
-      });
-      setMessage(complete ? "Clasificación completada." : "Borrador guardado.");
-      await onChanged();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Error"); }
-    finally { setBusy(false); }
-  };
-
-  const updateDraft = (lineNumber: number, field: keyof Omit<ItemDraft, "lineNumber">, value: string) =>
-    setDrafts((current) => current.map((item) => item.lineNumber === lineNumber ? { ...item, [field]: value } : item));
-
+  const isAccounting = task.stage === "accounting_classification";
+  const Operations = isAccounting ? "details" : "div";
   return (
     <section className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-      <div><h3 className="text-xs font-mono uppercase tracking-wider font-bold text-zinc-500 dark:text-zinc-400">Tarea humana</h3><p className="text-xs text-zinc-500">{task.stage} · {task.queueRole} · {task.status}{task.outcome && ` · ${task.outcome}`}</p></div>
-      {can("task.claim") && <button disabled={busy} className="rounded-lg bg-amber-500 hover:bg-amber-400 px-3 py-1.5 font-mono text-xs font-bold text-black" onClick={() => act("claim_task")}>Tomar tarea</button>}
-      {invoice.allowedActions.some(code => code !== "task.claim") && <>
-        {(can("classification.save") || can("classification.complete")) && <div className="space-y-2">
-          {drafts.map((item) => <div className="grid grid-cols-1 gap-2 rounded border p-2 sm:grid-cols-3" key={item.lineNumber}>
-            <label className="text-xs">Centro · línea {item.lineNumber}<input list="cost-centers" className="mt-1 w-full rounded border bg-transparent p-2" value={item.costCenter} onChange={(event) => updateDraft(item.lineNumber,"costCenter",event.target.value)} /></label>
-            <label className="text-xs">Subcentro<input list="subcost-centers" className="mt-1 w-full rounded border bg-transparent p-2" value={item.subCostCenter} onChange={(event) => updateDraft(item.lineNumber,"subCostCenter",event.target.value)} /></label>
-            <label className="text-xs">Cuenta<input list="accounts" className="mt-1 w-full rounded border bg-transparent p-2" value={item.accountingAccount} onChange={(event) => updateDraft(item.lineNumber,"accountingAccount",event.target.value)} /></label>
-          </div>)}
-          <datalist id="cost-centers">{catalogs?.costCenters.map((entry) => <option key={entry.code} value={entry.code}>{entry.displayName}</option>)}</datalist>
-          <datalist id="subcost-centers">{catalogs?.subCostCenters.map((entry) => <option key={`${entry.costCenterCode}:${entry.code}`} value={entry.code}>{entry.displayName}</option>)}</datalist>
-          <datalist id="accounts">{catalogs?.accounts.map((entry) => <option key={entry.code} value={entry.code}>{entry.displayName}</option>)}</datalist>
-          <div className="flex gap-2">{can("classification.save") && <button disabled={busy} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => classify(false)}>Guardar borrador</button>}{can("classification.complete") && <button disabled={busy} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 font-mono text-xs text-white" onClick={() => classify(true)}>Completar clasificación</button>}</div>
-        </div>}
+      <div><h3 className="text-xs font-mono uppercase tracking-wider font-bold text-zinc-500 dark:text-zinc-400">{isAccounting ? "Tarea de Contabilidad" : "Tarea humana"}</h3><p className="text-xs text-zinc-600 dark:text-zinc-400">{isAccounting ? (task.status === "available" ? "Disponible para tomar" : "Asignada") : [task.stage, task.queueRole, task.status, task.outcome].filter(Boolean).join(" · ")}</p></div>
+      {can("task.claim") && <button disabled={busy} className="rounded-lg bg-amber-500 hover:bg-amber-400 px-3 py-1.5 font-mono text-xs font-bold text-black" onClick={() => guard(() => act("claim_task"))}>Tomar tarea</button>}
+      {invoice.allowedActions.some(code => code !== "task.claim" && !code.startsWith("classification.")) && <Operations className="space-y-2">
+        {isAccounting && <summary className="cursor-pointer text-xs font-medium">Otras acciones de la tarea</summary>}
         <label className="block text-xs">Motivo para devoluciones o acciones excepcionales<textarea className="mt-1 w-full rounded border bg-transparent p-2" maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} /></label>
         <div className="flex flex-wrap gap-2">
-          {can("stage.approve") && <button disabled={busy} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 font-mono text-xs text-white" onClick={() => act("approve_stage")}>Aprobar etapa</button>}
-          {can("correction.request") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => act("request_correction")}>Solicitar corrección</button>}
+          {can("stage.approve") && <button disabled={busy} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 font-mono text-xs text-white" onClick={() => guard(() => act("approve_stage"))}>Aprobar etapa</button>}
+          {can("correction.request") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => guard(() => act("request_correction"))}>Solicitar corrección</button>}
           {task.stage === "sector_approval" && <>
-            {can("supplier.credit_note.request") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => act("request_credit_note")}>Solicitar nota de crédito</button>}
-            {can("supplier.corrected_invoice.request") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => act("request_corrected_invoice")}>Solicitar factura corregida</button>}
-            {can("circuit.cancel_internal") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => act("cancel_internal")}>Anular internamente</button>}
-            {can("exception.resolve") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => act("resolve_exception", { resolutionCode: "advance_to_direction" })}>Resolver excepción y avanzar</button>}
+            {can("supplier.credit_note.request") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => guard(() => act("request_credit_note"))}>Solicitar nota de crédito</button>}
+            {can("supplier.corrected_invoice.request") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => guard(() => act("request_corrected_invoice"))}>Solicitar factura corregida</button>}
+            {can("circuit.cancel_internal") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => guard(() => act("cancel_internal"))}>Anular internamente</button>}
+            {can("exception.resolve") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => guard(() => act("resolve_exception", { resolutionCode: "advance_to_direction" }))}>Resolver excepción y avanzar</button>}
           </>}
-          {can("task.return") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => act("return_task")}>Devolver a bandeja</button>}
-          {can("circuit.reject_final") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 font-mono text-xs text-rose-600 dark:text-rose-400" onClick={() => act("reject_final")}>Rechazar definitivamente</button>}
+          {can("task.return") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => guard(() => act("return_task"))}>Devolver a bandeja</button>}
+          {can("circuit.reject_final") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 font-mono text-xs text-rose-600 dark:text-rose-400" onClick={() => guard(() => act("reject_final"))}>Rechazar definitivamente</button>}
         </div>
-      </>}
+      </Operations>}
       {message && <p className="text-xs">{message}</p>}
     </section>
   );
