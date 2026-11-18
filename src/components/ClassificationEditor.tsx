@@ -6,7 +6,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import type { InvoiceDetail } from "@/types/invoice";
 import type { ClassificationCatalogs } from "@/lib/tasks/repository";
 import { emptyAssignment, invalidField, sameAssignment, type Assignment, type Field } from "@/lib/tasks/classification";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatItemQuantity } from "@/lib/utils";
 import { ClassificationFields } from "./ClassificationFields";
 import { InvoiceTotal } from "./InvoiceTotal";
 import { BulkClassification, secondaryButton } from "./BulkClassification";
@@ -139,7 +139,7 @@ export function ClassificationEditor({ invoice, onChanged, onDirtyChange, ref }:
                 <span className="min-w-0">
                   <span className="block font-mono text-[11px] text-zinc-600 dark:text-zinc-400">Línea {n}{item.code && " · " + item.code}</span>
                   <span className="block break-words text-sm font-medium">{item.description || "Sin descripción"}</span>
-                  <span className="block text-xs text-zinc-600 dark:text-zinc-400">{[item.quantity && "Cant. " + item.quantity, item.unit, item.unitPrice && money(item.unitPrice) + " c/u", item.vatCategory, item.vatRate].filter(Boolean).join(" · ")}</span>
+                  <span className="block text-xs text-zinc-600 dark:text-zinc-400">Cant. {formatItemQuantity(item.quantity, item.unit)}</span>
                 </span>
                 <span className="shrink-0 text-right"><span className="block font-mono text-xs font-semibold">{money(item.totalWithVat ?? item.subtotal)}</span>
                   <span className="mt-1 flex items-center justify-end gap-1 text-xs text-zinc-600 dark:text-zinc-400">

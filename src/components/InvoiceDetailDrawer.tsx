@@ -5,7 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ClassificationEditor, type DraftHandle } from "./ClassificationEditor";
 import { secondaryButton } from "./BulkClassification";
 import type { InvoiceDetail } from "@/types/invoice";
-import { currencyLabel, formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
+import { currencyLabel, formatCurrency, formatDate, formatDateTime, formatItemQuantity } from "@/lib/utils";
 import { StatusBadge, DuplicateBadge } from "./StatusBadge";
 import { TaskActionPanel } from "./TaskActionPanel";
 import { InvoiceHistoryTimeline } from "./InvoiceHistoryTimeline";
@@ -13,7 +13,11 @@ import { InvoiceTotal } from "./InvoiceTotal";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "./ui/sheet";
 import { FileText, X } from "lucide-react";
 
-export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, onChanged, onDirtyChange }: {
+function withoutTestPrefix(value: string | null) {
+  return value?.replace(/^SYNTHETIC · /, "") ?? null;
+}
+
+export function InvoiceDetailDrawer({ invoice: source, open, onOpenChange, isLoading, onChanged, onDirtyChange }: {
   invoice: InvoiceDetail | null;
   open: boolean;
   onOpenChange(open: boolean): void;
@@ -24,6 +28,13 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
   const editor = useRef<DraftHandle>(null);
   const [nextAction, setNextAction] = useState<(() => void) | null>(null);
   const [saving, setSaving] = useState(false);
+  // The review generator reserves this filename pattern and an all-zero recipient CUIT.
+  const isTest = source?.receiverTaxId === "00000000000" && /^TEST-SYNTHETIC-[1-9]\d*\.pdf$/.test(source.fileName);
+  const invoice = isTest ? {
+    ...source,
+    issuerName: withoutTestPrefix(source.issuerName),
+    items: source.items.map(item => ({ ...item, description: withoutTestPrefix(item.description) })),
+  } : source;
   function guard(action: () => void) {
     if (editor.current?.busy) return;
     if (editor.current?.dirty) setNextAction(() => action);
@@ -46,7 +57,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
         >
           <SheetDescription className="sr-only">Review current invoice details and available actions.</SheetDescription>
           {/* Fixed Drawer Header (shrink-0) */}
-          <div className="border-b border-zinc-200 dark:border-zinc-800 px-3.5 sm:px-6 py-3 sm:py-4 bg-zinc-50 dark:bg-zinc-900/95 flex items-center justify-between shrink-0">
+          <header className="border-b border-zinc-200 dark:border-zinc-800 px-3.5 sm:px-6 py-3 sm:py-4 bg-zinc-50 dark:bg-zinc-900/95 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <div className="p-1.5 sm:p-2 rounded-lg bg-zinc-200 dark:bg-zinc-800 text-amber-500 border border-zinc-300 dark:border-zinc-700 shrink-0">
                 <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -58,9 +69,10 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
                   </SheetTitle>
                   {invoice && <StatusBadge status={invoice.category} size="sm" />}
                 </div>
-                <p className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate max-w-[180px] sm:max-w-sm">
-                  {invoice?.issuerName ?? "—"}
-                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                  <span className="min-w-0 break-words font-medium text-zinc-700 dark:text-zinc-300">{invoice?.issuerName ?? "—"}</span>
+                  {isTest && <span className="rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:border-zinc-600 dark:text-zinc-300">Factura de prueba</span>}
+                </div>
               </div>
             </div>
 
@@ -71,28 +83,22 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
-          </div>
+          </header>
 
           {!invoice && <p role="status" className="p-4 text-sm text-zinc-500">{isLoading ? "Loading invoice details..." : "Unable to load invoice details."}</p>}
           {invoice && <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3.5 sm:px-6 py-3.5 sm:py-6 space-y-4 sm:space-y-6">
             {invoice.processingStage === "linked_duplicate" && <DuplicateBadge />}
             {/* Vendor & General Metadata Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-xs">
-              <div>
-                <span className="text-[10px] sm:text-[11px] font-mono uppercase text-zinc-500">Vendor Name</span>
-                <p className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-200 mt-0.5">{invoice.issuerName ?? "—"}</p>
-
-              </div>
-
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-xs">
               <div>
                 <span className="text-[10px] sm:text-[11px] font-mono uppercase text-zinc-500">Tax Registration</span>
                 <p className="text-xs font-mono text-zinc-800 dark:text-zinc-300 mt-0.5">
                   {invoice.issuerTaxId || "—"}
                 </p>
-                <div className="mt-1.5 text-[11px] sm:text-xs font-mono text-zinc-500 dark:text-zinc-400">
-                  <span>Currency: </span>
-                  <span className="text-zinc-900 dark:text-zinc-200 font-bold">{currencyLabel(invoice.currency)}</span>
-                </div>
+              </div>
+              <div>
+                <span className="text-[10px] sm:text-[11px] font-mono uppercase text-zinc-500">Currency</span>
+                <p className="mt-0.5 font-mono text-xs font-semibold text-zinc-800 dark:text-zinc-300">{currencyLabel(invoice.currency)}</p>
               </div>
 
               <div className="border-t border-zinc-200 dark:border-zinc-800/80 pt-2 sm:pt-3">
@@ -120,7 +126,6 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
                       <tr>
                         <th className="py-2 pl-3 pr-2 text-left">Description</th>
                         <th className="px-2 py-2 text-right">Qty</th>
-                        <th className="px-2 py-2 text-right">Unit Price</th>
                         <th className="py-2 pl-2 pr-3 text-right">Amount</th>
                       </tr>
                     </thead>
@@ -130,14 +135,11 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
                           <tr key={item.lineNumber} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
                             <td className="py-2 pl-3 pr-2 text-zinc-800 dark:text-zinc-200 font-sans text-[11px] sm:text-xs">
                               {item.description ?? "—"}
-                              <small className="block text-zinc-500">{["Línea " + item.lineNumber,item.code,item.unit,item.vatCategory,item.vatRate].filter(Boolean).join(" · ")}</small>
+                              <small className="block text-zinc-500">{["Línea " + item.lineNumber, item.code].filter(Boolean).join(" · ")}</small>
                               <small className="block text-zinc-500">{[item.costCenter,item.subCostCenter,item.accountingAccount].filter(Boolean).join(" · ")}</small>
                             </td>
                             <td className="px-2 py-2 text-right text-zinc-600 dark:text-zinc-400 tabular-nums">
-                              {item.quantity ?? "—"}
-                            </td>
-                            <td className="px-2 py-2 text-right text-zinc-600 dark:text-zinc-400 tabular-nums">
-                              {money(item.unitPrice)}
+                              {formatItemQuantity(item.quantity, item.unit)}
                             </td>
                             <td className="py-2 pl-2 pr-3 text-right text-zinc-900 dark:text-zinc-100 font-bold tabular-nums">
                               {money(item.totalWithVat ?? item.subtotal)}
@@ -146,7 +148,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={4} className="py-4 text-center text-zinc-500">
+                          <td colSpan={3} className="py-4 text-center text-zinc-500">
                             No itemized lines recorded
                           </td>
                         </tr>

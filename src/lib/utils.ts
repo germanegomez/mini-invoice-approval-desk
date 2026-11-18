@@ -19,6 +19,11 @@ export function currencyLabel(currency: string | null | undefined): string {
   return currency === "ARS" ? "$" : currency;
 }
 
+export function formatItemQuantity(quantity: string | null, unit: string | null): string {
+  if (quantity == null) return "—";
+  return unit && unit !== "unidad" ? `${quantity} ${unit}` : quantity;
+}
+
 function isDecimal(value: string): value is `${number}` {
   return /^-?\d+(?:\.\d+)?$/.test(value);
 }
