@@ -105,7 +105,7 @@ export function TaskActionPanel({ invoice, onChanged }: {
           <label htmlFor={sectorId} className="text-xs">Sector</label>
           <Select value={sectorRole} onValueChange={setSectorRole} disabled={busy}>
             <SelectTrigger id={sectorId} className="w-40"><SelectValue /></SelectTrigger>
-            <SelectContent>
+            <SelectContent updatePositionStrategy="always">
               <SelectItem value="purchasing">Compras</SelectItem>
               <SelectItem value="maintenance">Mantenimiento</SelectItem>
               <SelectItem value="billing">Facturación</SelectItem>
