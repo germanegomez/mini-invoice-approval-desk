@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   PREPARATION_STATUSES,
   PROCESSING_STAGES,
+  INVOICE_TABS,
   type InvoiceFilters,
 } from "@/types/invoice";
 import { decodeInvoiceCursor } from "./cursor";
@@ -15,6 +16,8 @@ const optionalTrimmed = (max: number) =>
   z.string().trim().max(max).optional().transform((value) => value || undefined);
 
 const filterSchema = z.object({
+  tab: z.enum(INVOICE_TABS).optional(),
+  vendor: z.string().min(1).optional(),
   processingStage: z.enum(PROCESSING_STAGES).optional(),
   preparationStatus: z.enum(PREPARATION_STATUSES).optional(),
   currency: z.string().trim().regex(/^[A-Z]{3}$/).optional(),

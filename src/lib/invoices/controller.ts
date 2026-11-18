@@ -46,7 +46,7 @@ export interface InvoiceControllerDependencies {
   authenticate(): Promise<AuthenticatedPortalUser>;
   resolveScope(user: AuthenticatedPortalUser): Promise<InvoiceReadScope>;
   list(scope: InvoiceReadScope, filters: InvoiceFilters): Promise<InvoicePage>;
-  detail(scope: InvoiceReadScope, universalRawId: number): Promise<InvoiceDetail | null>;
+  detail(scope: InvoiceReadScope, universalRawId: number, actor: string): Promise<InvoiceDetail | null>;
   filterOptions(scope: InvoiceReadScope): Promise<FilterOptions>;
   stats(scope: InvoiceReadScope): Promise<InvoiceStats>;
   audit(
@@ -104,7 +104,7 @@ export async function handleInvoiceDetail(
       await dependencies.audit(user.id, universalRawId, "denied", requestId);
       throw new InvoiceScopeError();
     }
-    const invoice = await dependencies.detail(resolvedScope, universalRawId);
+    const invoice = await dependencies.detail(resolvedScope, universalRawId, user.id);
     if (!invoice) {
       await dependencies.audit(user.id, universalRawId, "not_found_or_out_of_scope", requestId);
       return privateJson({ success: false, error: "Invoice not found" }, 404, requestId);

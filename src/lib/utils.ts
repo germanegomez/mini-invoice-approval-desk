@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 export function formatCurrency(amount: number | string | null | undefined, currency = "USD"): string {
   if (amount === null || amount === undefined || amount === "") return "—";
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  if (isNaN(num)) return "—";
+  if (!/^[A-Z]{3}$/.test(currency) || !Number.isFinite(num) || (typeof amount === "string" && !/^-?\d+(?:\.\d+)?$/.test(amount))) return "—";
 
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -47,6 +47,7 @@ export function formatDateTime(date: Date | string | null | undefined): string {
 
 export function getStatusConfig(status: string) {
   switch (status) {
+    case "APPROVED":
     case "processed":
     case "posted":
       return {
@@ -54,6 +55,7 @@ export function getStatusConfig(status: string) {
         bg: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
         dot: "bg-emerald-400",
       };
+    case "NEEDS_REVIEW":
     case "requires_human_review":
     case "awaiting_classification":
     case "extracted":
@@ -68,6 +70,7 @@ export function getStatusConfig(status: string) {
         bg: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
         dot: "bg-amber-400",
       };
+    case "REJECTED":
     case "rejected":
     case "error":
       return {

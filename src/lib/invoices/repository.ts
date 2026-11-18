@@ -1,7 +1,11 @@
+import { availableActions, type PermissionRow } from "@/lib/tasks/available-actions";
+import { categorySql, tabCategories } from "./presentation";
+import { DISPLAY_CATEGORIES } from "@/types/invoice";
 import type { InvoiceReadScope } from "./scope";
 import { decodeInvoiceCursor, encodeInvoiceCursor } from "./cursor";
 import type {
   CurrencyTotal,
+  DisplayCategory,
   FilterOptions,
   InvoiceDetail,
   InvoiceFilters,
@@ -24,6 +28,8 @@ export interface QueryExecutor {
 }
 
 interface HeaderRow extends Record<string, unknown> {
+  category: DisplayCategory;
+  item_count: number | string;
   universal_raw_id: number;
   extraction_revision: number;
   processing_stage: ProcessingStage;
@@ -83,6 +89,7 @@ interface OutcomeRow extends Record<string, unknown> {
   id: number | string;
   outcome: HumanOutcome["outcome"];
   source_task_id: number | string;
+  source_assignee: number | string | null;
   created_at: Date | string;
 }
 
@@ -100,6 +107,9 @@ interface ContinuationRow extends Record<string, unknown> {
 }
 
 const HEADER_COLUMNS = `
+  ${categorySql} AS category,
+  (SELECT count(*) FROM portal.invoice_items_v1 line WHERE line.universal_raw_id = i.universal_raw_id
+     AND line.extraction_revision = i.extraction_revision) AS item_count,
   i.universal_raw_id,
   i.extraction_revision,
   i.processing_stage,
@@ -128,6 +138,8 @@ function iso(value: Date | string): string {
 
 export function mapInvoiceSummary(row: HeaderRow): InvoiceSummary {
   return {
+    category: row.category,
+    itemCount: Number(row.item_count),
     universalRawId: Number(row.universal_raw_id),
     extractionRevision: Number(row.extraction_revision),
     processingStage: row.processing_stage,
@@ -210,6 +222,12 @@ function scopedWhere(
   addScope(parts, scope, alias);
   if (!filters) return parts;
 
+  if (filters.tab) {
+    parts.clauses.push(`(${categorySql}) = ANY(${pushParameter(parts, tabCategories[filters.tab])}::text[])`);
+  }
+  if (filters.vendor) {
+    parts.clauses.push(`${alias}.razon_social_emisor = ${pushParameter(parts, filters.vendor)}`);
+  }
   if (filters.processingStage) {
     parts.clauses.push(`${alias}.processing_stage = ${pushParameter(parts, filters.processingStage)}`);
   }
@@ -283,6 +301,7 @@ export async function getInvoiceDetail(
   query: QueryExecutor,
   scope: InvoiceReadScope,
   universalRawId: number,
+  actor: string,
 ): Promise<InvoiceDetail | null> {
   const headerParts = scopedWhere(scope);
   headerParts.clauses.push(`i.universal_raw_id = ${pushParameter(headerParts, universalRawId)}`);
@@ -348,10 +367,11 @@ export async function getInvoiceDetail(
     updatedAt: iso(taskRow.updated_at),
   } : null;
   const outcomeRows = await query<OutcomeRow>(`
-    SELECT id, outcome, source_task_id, created_at
-      FROM portal.invoice_outcomes_v1
-     WHERE universal_raw_id = $1 AND extraction_revision = $2
-     ORDER BY id DESC LIMIT 1
+    SELECT o.id, o.outcome, o.source_task_id, o.created_at, source.assignee_user_id AS source_assignee
+      FROM portal.invoice_outcomes_v1 o
+      JOIN portal.human_tasks source ON source.id = o.source_task_id
+     WHERE o.universal_raw_id = $1 AND o.extraction_revision = $2
+     ORDER BY o.id DESC LIMIT 1
   `, [universalRawId, header.extraction_revision]);
   const outcomeRow = outcomeRows[0];
   const humanOutcome: HumanOutcome | null = outcomeRow ? {
@@ -378,7 +398,18 @@ export async function getInvoiceDetail(
     updatedAt: iso(continuationRow.updated_at),
     completedAt: continuationRow.completed_at === null ? null : iso(continuationRow.completed_at),
   } : null;
-  return { ...mapInvoiceSummary(header), items: items.map(mapInvoiceItem), task, humanOutcome, continuation };
+  const permissions = await query<PermissionRow>(`
+    SELECT role.code AS role, permission.code AS permission
+      FROM portal.users u
+      JOIN portal.user_roles member ON member.user_id = u.id
+      JOIN portal.roles role ON role.id = member.role_id AND role.active
+      JOIN portal.role_permissions bundle ON bundle.role_id = role.id
+      JOIN portal.permissions permission ON permission.id = bundle.permission_id AND permission.active
+     WHERE u.id = $1 AND u.enabled
+  `, [actor]);
+  const invoice = { ...mapInvoiceSummary(header), items: items.map(mapInvoiceItem), task, humanOutcome, continuation };
+  const sourceAssignee = outcomeRow?.source_assignee;
+  return { ...invoice, allowedActions: availableActions(invoice, actor, permissions, sourceAssignee == null ? null : String(sourceAssignee)) };
 }
 
 export async function getFilterOptions(
@@ -388,7 +419,7 @@ export async function getFilterOptions(
   const stageParts = scopedWhere(scope);
   const preparationParts = scopedWhere(scope);
   const currencyParts = scopedWhere(scope);
-  const [stages, preparations, currencies] = await Promise.all([
+  const [stages, preparations, currencies, vendors] = await Promise.all([
     query<{ value: ProcessingStage }>(`
       SELECT DISTINCT i.processing_stage AS value
         FROM portal.invoices_v1 i
@@ -407,8 +438,14 @@ export async function getFilterOptions(
        WHERE ${currencyParts.clauses.join(" AND ")} AND i.moneda ~ '^[A-Z]{3}$'
        ORDER BY value
     `, currencyParts.parameters),
+    query<{ value: string }>(`
+      SELECT DISTINCT i.razon_social_emisor AS value FROM portal.invoices_v1 i
+       WHERE ${stageParts.clauses.join(" AND ")} AND NULLIF(trim(i.razon_social_emisor), '') IS NOT NULL
+       ORDER BY value
+    `, stageParts.parameters),
   ]);
   return {
+    vendors: vendors.map(row => row.value),
     processingStages: stages.map((row) => row.value),
     preparationStatuses: preparations.map((row) => row.value),
     currencies: currencies.map((row) => row.value),
@@ -421,6 +458,8 @@ interface CountRow extends Record<string, unknown> {
 }
 
 interface CurrencyRow extends Record<string, unknown> {
+  category: DisplayCategory | null;
+  category_count: string | number;
   currency: string | null;
   amount: string | null;
   included_count: string | number;
@@ -455,6 +494,7 @@ export async function getInvoiceStats(
     `, preparationParts.parameters),
     query<CurrencyRow>(`
       SELECT
+        i.category, count(*) AS category_count,
         i.moneda AS currency,
         CASE WHEN i.moneda ~ '^[A-Z]{3}$'
           THEN sum(i.importe_total::numeric) FILTER (
@@ -472,20 +512,27 @@ export async function getInvoiceStats(
              OR i.importe_total IS NULL
              OR i.importe_total !~ '^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$'
         )::bigint AS excluded_count
-      FROM portal.invoices_v1 i
-      WHERE ${currencyParts.clauses.join(" AND ")}
-      GROUP BY i.moneda
+      FROM (
+        SELECT i.moneda, i.importe_total, ${categorySql} AS category
+          FROM portal.invoices_v1 i WHERE ${currencyParts.clauses.join(" AND ")}
+      ) i
+      GROUP BY GROUPING SETS ((i.moneda), (i.category, i.moneda))
       ORDER BY i.moneda NULLS LAST
     `, currencyParts.parameters),
   ]);
   const processingStages = mapCounts(processingRows);
-  const currencyTotals: CurrencyTotal[] = currencyRows.map((row) => ({
+  const currencyTotal = (row: CurrencyRow): CurrencyTotal => ({
     currency: row.currency,
     amount: row.amount,
     includedCount: Number(row.included_count),
     excludedCount: Number(row.excluded_count),
-  }));
+  });
+  const currencyTotals = currencyRows.filter(row => row.category === null).map(currencyTotal);
   return {
+    categories: DISPLAY_CATEGORIES.map(code => {
+      const rows = currencyRows.filter(row => row.category === code);
+      return { code, count: rows.reduce((sum, row) => sum + Number(row.category_count), 0), currencyTotals: rows.map(currencyTotal) };
+    }),
     totalCount: processingStages.reduce((total, row) => total + row.count, 0),
     processingStages,
     preparationStatuses: mapCounts(preparationRows),

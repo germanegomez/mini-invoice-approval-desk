@@ -27,6 +27,7 @@ export function TaskActionPanel({ invoice, onChanged }: {
   onChanged(): Promise<void> | void;
 }) {
   const task = invoice.task;
+  const can = (code: string) => invoice.allowedActions.includes(code);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -40,11 +41,12 @@ export function TaskActionPanel({ invoice, onChanged }: {
   })));
 
   useEffect(() => {
-    if (task?.stage !== "accounting_classification") return;
+    if (task?.stage !== "accounting_classification" || !invoice.allowedActions.some(code => code.startsWith("classification."))) return;
     void fetch("/api/classification-catalogs", { cache: "no-store" })
       .then((response) => response.json())
-      .then((payload) => { if (payload.success) setCatalogs(payload.data); });
-  }, [task?.stage]);
+      .then((payload) => { if (payload.success) setCatalogs(payload.data); })
+      .catch(() => setMessage("No se pudo cargar el catálogo."));
+  }, [task?.stage, invoice.allowedActions]);
 
   const startCircuit = async () => {
     setBusy(true); setMessage(null);
@@ -75,17 +77,17 @@ export function TaskActionPanel({ invoice, onChanged }: {
     finally { setBusy(false); }
   };
 
-  if (!task) return <section className="space-y-3 rounded-lg border p-3 text-sm">
-    <div><h3 className="text-sm font-bold">Resultado humano</h3><p className="text-zinc-500">{invoice.humanOutcome?.outcome ?? "No hay una tarea humana abierta para esta revisión."}</p></div>
+  if (!task) return <section className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-900/60">
+    <div><h3 className="text-xs font-mono uppercase tracking-wider font-bold text-zinc-500 dark:text-zinc-400">Resultado humano</h3><p className="text-zinc-500">{invoice.humanOutcome?.outcome ?? "No hay una tarea humana abierta para esta revisión."}</p></div>
     {invoice.continuation ? <div className="rounded border p-3">
       <h4 className="text-xs font-bold uppercase tracking-wide text-zinc-500">Procesamiento posterior a la aprobación</h4>
       <p className="mt-1 font-mono text-xs">{invoice.continuation.status} · intento {invoice.continuation.attempts}/3</p>
       {invoice.continuation.errorCode && <p className="mt-1 text-xs text-rose-600">{invoice.continuation.errorCode}: {invoice.continuation.errorDetail}</p>}
-    </div> : invoice.humanOutcome?.outcome === "ready_for_post_approval_processing" ?
-      <button disabled={busy} className="rounded bg-emerald-600 px-3 py-2 text-xs font-bold text-white" onClick={processApprovedInvoice}>Procesar factura aprobada</button> :
-      !invoice.humanOutcome && <div className="flex flex-wrap items-end gap-2">
+    </div> : can("continuation.enqueue") ?
+      <button disabled={busy} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 font-mono text-xs font-bold text-white" onClick={processApprovedInvoice}>Procesar factura aprobada</button> :
+      can("task.start") && <div className="flex flex-wrap items-end gap-2">
         <label className="text-xs">Sector inicial<select className="ml-2 rounded border bg-transparent p-2" value={sectorRole} onChange={(event) => setSectorRole(event.target.value as typeof sectorRole)}><option value="purchasing">Compras</option><option value="maintenance">Mantenimiento</option><option value="billing">Facturación</option></select></label>
-        <button disabled={busy} className="rounded bg-amber-500 px-3 py-2 text-xs font-bold text-black" onClick={startCircuit}>Iniciar circuito</button>
+        <button disabled={busy} className="rounded-lg bg-amber-500 hover:bg-amber-400 px-3 py-1.5 font-mono text-xs font-bold text-black" onClick={startCircuit}>Iniciar circuito</button>
       </div>}
     {message && <p className="text-xs">{message}</p>}
   </section>;
@@ -130,10 +132,10 @@ export function TaskActionPanel({ invoice, onChanged }: {
 
   return (
     <section className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-      <div><h3 className="text-sm font-bold">Tarea humana #{task.id}</h3><p className="text-xs text-zinc-500">{task.stage} · {task.queueRole} · {task.status}</p></div>
-      {task.status === "available" && <button disabled={busy} className="rounded bg-amber-500 px-3 py-2 text-xs font-bold text-black" onClick={() => act("claim_task")}>Tomar tarea</button>}
-      {task.status !== "available" && <>
-        {task.stage === "accounting_classification" && <div className="space-y-2">
+      <div><h3 className="text-xs font-mono uppercase tracking-wider font-bold text-zinc-500 dark:text-zinc-400">Tarea humana</h3><p className="text-xs text-zinc-500">{task.stage} · {task.queueRole} · {task.status}{task.outcome && ` · ${task.outcome}`}</p></div>
+      {can("task.claim") && <button disabled={busy} className="rounded-lg bg-amber-500 hover:bg-amber-400 px-3 py-1.5 font-mono text-xs font-bold text-black" onClick={() => act("claim_task")}>Tomar tarea</button>}
+      {invoice.allowedActions.some(code => code !== "task.claim") && <>
+        {(can("classification.save") || can("classification.complete")) && <div className="space-y-2">
           {drafts.map((item) => <div className="grid grid-cols-1 gap-2 rounded border p-2 sm:grid-cols-3" key={item.lineNumber}>
             <label className="text-xs">Centro · línea {item.lineNumber}<input list="cost-centers" className="mt-1 w-full rounded border bg-transparent p-2" value={item.costCenter} onChange={(event) => updateDraft(item.lineNumber,"costCenter",event.target.value)} /></label>
             <label className="text-xs">Subcentro<input list="subcost-centers" className="mt-1 w-full rounded border bg-transparent p-2" value={item.subCostCenter} onChange={(event) => updateDraft(item.lineNumber,"subCostCenter",event.target.value)} /></label>
@@ -142,20 +144,20 @@ export function TaskActionPanel({ invoice, onChanged }: {
           <datalist id="cost-centers">{catalogs?.costCenters.map((entry) => <option key={entry.code} value={entry.code}>{entry.displayName}</option>)}</datalist>
           <datalist id="subcost-centers">{catalogs?.subCostCenters.map((entry) => <option key={`${entry.costCenterCode}:${entry.code}`} value={entry.code}>{entry.displayName}</option>)}</datalist>
           <datalist id="accounts">{catalogs?.accounts.map((entry) => <option key={entry.code} value={entry.code}>{entry.displayName}</option>)}</datalist>
-          <div className="flex gap-2"><button disabled={busy} className="rounded border px-3 py-2 text-xs" onClick={() => classify(false)}>Guardar borrador</button><button disabled={busy} className="rounded bg-emerald-600 px-3 py-2 text-xs text-white" onClick={() => classify(true)}>Completar clasificación</button></div>
+          <div className="flex gap-2">{can("classification.save") && <button disabled={busy} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => classify(false)}>Guardar borrador</button>}{can("classification.complete") && <button disabled={busy} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 font-mono text-xs text-white" onClick={() => classify(true)}>Completar clasificación</button>}</div>
         </div>}
         <label className="block text-xs">Motivo para devoluciones o acciones excepcionales<textarea className="mt-1 w-full rounded border bg-transparent p-2" maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} /></label>
         <div className="flex flex-wrap gap-2">
-          {(task.stage === "sector_approval" || task.stage === "direction_approval") && <button disabled={busy} className="rounded bg-emerald-600 px-3 py-2 text-xs text-white" onClick={() => act("approve_stage")}>Aprobar etapa</button>}
-          {task.stage !== "sector_approval" && <button disabled={busy || !reason.trim()} className="rounded border px-3 py-2 text-xs" onClick={() => act("request_correction")}>Solicitar corrección</button>}
+          {can("stage.approve") && <button disabled={busy} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 font-mono text-xs text-white" onClick={() => act("approve_stage")}>Aprobar etapa</button>}
+          {can("correction.request") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => act("request_correction")}>Solicitar corrección</button>}
           {task.stage === "sector_approval" && <>
-            <button disabled={busy || !reason.trim()} className="rounded border px-3 py-2 text-xs" onClick={() => act("request_credit_note")}>Solicitar nota de crédito</button>
-            <button disabled={busy || !reason.trim()} className="rounded border px-3 py-2 text-xs" onClick={() => act("request_corrected_invoice")}>Solicitar factura corregida</button>
-            <button disabled={busy || !reason.trim()} className="rounded border px-3 py-2 text-xs" onClick={() => act("cancel_internal")}>Anular internamente</button>
-            <button disabled={busy || !reason.trim()} className="rounded border px-3 py-2 text-xs" onClick={() => act("resolve_exception", { resolutionCode: "advance_to_direction" })}>Resolver excepción y avanzar</button>
+            {can("supplier.credit_note.request") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => act("request_credit_note")}>Solicitar nota de crédito</button>}
+            {can("supplier.corrected_invoice.request") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => act("request_corrected_invoice")}>Solicitar factura corregida</button>}
+            {can("circuit.cancel_internal") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => act("cancel_internal")}>Anular internamente</button>}
+            {can("exception.resolve") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => act("resolve_exception", { resolutionCode: "advance_to_direction" })}>Resolver excepción y avanzar</button>}
           </>}
-          {task.status === "claimed" && <button disabled={busy || !reason.trim()} className="rounded border px-3 py-2 text-xs" onClick={() => act("return_task")}>Devolver a bandeja</button>}
-          <button disabled={busy || !reason.trim()} className="rounded border border-rose-500 px-3 py-2 text-xs text-rose-600" onClick={() => act("reject_final")}>Rechazar definitivamente</button>
+          {can("task.return") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800 px-3 py-1.5 font-mono text-xs" onClick={() => act("return_task")}>Devolver a bandeja</button>}
+          {can("circuit.reject_final") && <button disabled={busy || !reason.trim()} className="rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 font-mono text-xs text-rose-600 dark:text-rose-400" onClick={() => act("reject_final")}>Rechazar definitivamente</button>}
         </div>
       </>}
       {message && <p className="text-xs">{message}</p>}

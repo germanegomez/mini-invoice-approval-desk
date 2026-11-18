@@ -3,12 +3,15 @@
 import { useQuery } from "@tanstack/react-query";
 import type {
   InvoiceDetail,
+  TabType,
   InvoiceListResponse,
   PreparationStatus,
   ProcessingStage,
 } from "@/types/invoice";
 
 export interface InvoiceQueryFilters {
+  tab?: TabType;
+  vendor?: string;
   processingStage?: ProcessingStage;
   preparationStatus?: PreparationStatus;
   currency?: string;
