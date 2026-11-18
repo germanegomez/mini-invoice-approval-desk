@@ -5,17 +5,32 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(amount: number | string | null | undefined, currency = "USD"): string {
-  if (amount === null || amount === undefined || amount === "") return "—";
-  const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  if (!/^[A-Z]{3}$/.test(currency) || !Number.isFinite(num) || (typeof amount === "string" && !/^-?\d+(?:\.\d+)?$/.test(amount))) return "—";
+const moneyFormat = new Intl.NumberFormat("es-AR", {
+  style: "currency",
+  currency: "ARS",
+  currencyDisplay: "code",
+  useGrouping: "always",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(num);
+export function currencyLabel(currency: string | null | undefined): string {
+  if (!currency || !/^[A-Z]{3}$/.test(currency)) return "—";
+  return currency === "ARS" ? "$" : currency;
+}
+
+function isDecimal(value: string): value is `${number}` {
+  return /^-?\d+(?:\.\d+)?$/.test(value);
+}
+
+export function formatCurrency(amount: number | string | null | undefined, currency: string | null): string {
+  const label = currencyLabel(currency);
+  if (label === "—" || amount == null) return "—";
+  if (typeof amount === "string" && !isDecimal(amount)) return "—";
+  if (typeof amount === "number" && !Number.isFinite(amount)) return "—";
+  return moneyFormat.formatToParts(amount)
+    .map(part => part.type === "currency" ? label : part.value)
+    .join("");
 }
 
 export function formatDate(date: Date | string | null | undefined): string {

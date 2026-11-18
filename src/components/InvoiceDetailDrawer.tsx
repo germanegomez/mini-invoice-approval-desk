@@ -1,7 +1,7 @@
 "use client";
 
 import type { InvoiceDetail } from "@/types/invoice";
-import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
+import { currencyLabel, formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { StatusBadge, DuplicateBadge } from "./StatusBadge";
 import { TaskActionPanel } from "./TaskActionPanel";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "./ui/sheet";
@@ -70,7 +70,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
                 </p>
                 <div className="mt-1.5 text-[11px] sm:text-xs font-mono text-zinc-500 dark:text-zinc-400">
                   <span>Currency: </span>
-                  <span className="text-zinc-900 dark:text-zinc-200 font-bold">{invoice.currency ?? "—"}</span>
+                  <span className="text-zinc-900 dark:text-zinc-200 font-bold">{currencyLabel(invoice.currency)}</span>
                 </div>
               </div>
 

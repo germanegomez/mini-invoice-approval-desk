@@ -17,6 +17,7 @@ interface AdvancedFiltersProps {
 }
 
 const selectClass = "w-full min-w-0 h-9 rounded-md border border-zinc-300 bg-white px-2 text-xs font-mono dark:border-zinc-700 dark:bg-zinc-950";
+const currencyNames: Record<string, string> = { ARS: "Pesos argentinos ($)", USD: "Dólares estadounidenses (USD)" };
 
 export function AdvancedFilters({ value, options, onChange }: AdvancedFiltersProps) {
   const update = (key: keyof FilterState, next: string) => onChange({ ...value, [key]: next });
@@ -48,7 +49,7 @@ export function AdvancedFilters({ value, options, onChange }: AdvancedFiltersPro
           value={value.currency}
         >
           <option value="">Todas las monedas</option>
-          {options?.currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+          {options?.currencies.map((currency) => <option key={currency} value={currency}>{currencyNames[currency] ?? currency}</option>)}
         </select>
         <div className="grid grid-cols-2 gap-2">
           <input aria-label="Emisión desde" className={selectClass} onChange={(event) => update("issueDateFrom", event.target.value)} type="date" value={value.issueDateFrom} />

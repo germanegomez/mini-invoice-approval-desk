@@ -1,6 +1,6 @@
 import React from "react";
 import type { CategoryStats, DisplayCategory } from "@/types/invoice";
-import { formatCurrency } from "@/lib/utils";
+import { currencyLabel, formatCurrency } from "@/lib/utils";
 import { Clock, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 
 interface KPIBarProps {
@@ -54,10 +54,9 @@ export function KPIBar({ stats }: KPIBarProps) {
         const Icon = card.icon;
         const group = stats.find(entry => entry.code === card.code);
         const count = group?.count ?? 0;
-        const totals = group?.currencyTotals.filter(total => total.currency !== null) ?? [];
-        const amount = totals.length > 1 ? "Multiple currencies"
-          : totals[0]?.currency ? formatCurrency(totals[0].amount, totals[0].currency)
-          : count === 0 ? formatCurrency(0) : "—";
+        const totals = (group?.currencyTotals ?? [])
+          .filter(total => currencyLabel(total.currency) !== "—")
+          .sort((a, b) => currencyRank(a.currency) - currencyRank(b.currency));
         return (
           <div
             key={card.title}
@@ -72,9 +71,12 @@ export function KPIBar({ stats }: KPIBarProps) {
               </div>
             </div>
 
-            <div className="mt-1.5 sm:mt-3 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1">
-              <div className="text-sm sm:text-2xl font-bold font-mono tabular-nums text-zinc-900 dark:text-zinc-100 tracking-tight truncate">
-                {amount}
+            <div className="mt-1.5 sm:mt-3 flex flex-col sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between gap-1">
+              <div className="min-w-0 max-w-full space-y-0.5 break-words text-sm sm:text-xl xl:text-2xl font-bold font-mono tabular-nums text-zinc-900 dark:text-zinc-100 tracking-tight">
+                {totals.length ? totals.map(total => {
+                  const subtotal = formatCurrency(total.amount, total.currency);
+                  return <div key={total.currency}>{subtotal === "—" ? `${currencyLabel(total.currency)} —` : subtotal}</div>;
+                }) : count === 0 ? formatCurrency(0, "ARS") : "—"}
               </div>
               <div className="self-start sm:self-auto inline-flex items-center px-1.5 py-0.5 rounded text-[9px] sm:text-xs font-mono font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 whitespace-nowrap">
                 {count} {count === 1 ? "inv" : "invs"}
@@ -89,4 +91,10 @@ export function KPIBar({ stats }: KPIBarProps) {
       })}
     </div>
   );
+}
+
+function currencyRank(currency: string | null): number {
+  if (currency === "ARS") return 0;
+  if (currency === "USD") return 1;
+  return 2;
 }
