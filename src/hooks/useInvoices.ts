@@ -3,12 +3,15 @@
 import { useQuery } from "@tanstack/react-query";
 import type {
   InvoiceDetail,
+  TabType,
   InvoiceListResponse,
   PreparationStatus,
   ProcessingStage,
 } from "@/types/invoice";
 
 export interface InvoiceQueryFilters {
+  tab?: TabType;
+  vendor?: string;
   processingStage?: ProcessingStage;
   preparationStatus?: PreparationStatus;
   currency?: string;
@@ -46,13 +49,14 @@ export function useInvoicesQuery(filters: InvoiceQueryFilters) {
   });
 }
 
-export function useInvoiceDetailQuery(id: number | null) {
+export function useInvoiceDetailQuery(id: number | null, editing = false) {
   return useQuery<{ success: true; data: InvoiceDetail }>({
     queryKey: ["invoice", id],
     queryFn: async () =>
       readJson(await fetch(`/api/invoices/${id}`, { cache: "no-store" })),
     enabled: id !== null,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: !editing,
+    refetchOnReconnect: !editing,
     staleTime: 0,
     retry: false,
   });

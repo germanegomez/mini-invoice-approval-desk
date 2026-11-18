@@ -16,7 +16,7 @@ import {
   startHumanCircuit,
 } from "../src/lib/tasks/repository";
 import type { QueryExecutor } from "../src/lib/invoices/repository";
-import { handleClassification, handleContinuation, handleTaskAction, type TaskControllerDependencies } from "../src/lib/tasks/controller";
+import { handleCatalogs, handleClassification, handleContinuation, handleTaskAction, type TaskControllerDependencies } from "../src/lib/tasks/controller";
 
 const key = "00000000-0000-4000-8000-000000000061";
 
@@ -40,7 +40,8 @@ test("task contracts accept only named actions, revisions and UUID idempotency k
 
 test("classification validates bounded per-item fields and replacement preserves distinct identities", () => {
   assert.equal(classificationSchema.parse({ expectedRevision: 3, idempotencyKey: key, complete: false, items: [{ lineNumber: 1, costCenter: "CC", subCostCenter: null, accountingAccount: null }] }).items.length, 1);
-  assert.throws(() => classificationSchema.parse({ expectedRevision: 3, idempotencyKey: key, complete: true, items: [] }));
+  assert.doesNotThrow(() => classificationSchema.parse({ expectedRevision: 3, idempotencyKey: key, complete: true, items: [] }));
+  assert.throws(() => classificationSchema.parse({ expectedRevision: 3, idempotencyKey: key, complete: false, items: [] }));
   assert.throws(() => classificationSchema.parse({ expectedRevision: 3, idempotencyKey: key, complete: false, items: [
     { lineNumber: 1, costCenter: "CC", subCostCenter: null, accountingAccount: null },
     { lineNumber: 1, costCenter: "CC-2", subCostCenter: null, accountingAccount: null },
@@ -75,12 +76,12 @@ test("repository calls only allowlisted portal functions with session actor", as
 test("catalog queries expose only active allowlisted codes", async () => {
   const { query, calls } = queued([
     [{ code: "CC-1", display_name: "Centro" }],
-    [{ cost_center_code: "CC-1", code: "SC-1", display_name: "Subcentro" }],
+    [{ code: "SC-1", display_name: "Subcentro" }],
     [{ code: "AC-1", display_name: "Cuenta" }],
   ]);
   const catalogs = await getClassificationCatalogs(query);
   assert.equal(catalogs.costCenters[0].code, "CC-1");
-  assert.equal(catalogs.subCostCenters[0].costCenterCode, "CC-1");
+  assert.equal(catalogs.subCostCenters[0].code, "SC-1");
   assert.equal(catalogs.accounts[0].code, "AC-1");
   assert.equal(calls.every((call) => /WHERE active/.test(call.text)), true);
 });
@@ -131,4 +132,18 @@ test("continuation controller derives actor from the session and rejects contrac
     method: "POST", body: JSON.stringify({ humanOutcomeId: 8, expectedRevision: 3, idempotencyKey: key, contractVersion: 2, actor: "8" }),
   }), dependencies());
   assert.equal(rejected.status, 400);
+});
+
+test("private catalogs use the session actor and withhold data on denial", async () => {
+  const restricted = await handleCatalogs(dependencies({
+    authenticate: async () => ({id:"17"}),
+    catalogs: async actor => { assert.equal(actor, "17"); return null; },
+  }));
+  assert.equal(restricted.status,403);
+  assert.equal((await restricted.json()).data,undefined);
+  const unauthenticated = await handleCatalogs(dependencies({
+    authenticate: async () => { throw {status:401}; },
+    catalogs: async () => { throw new Error("Catalog read before authentication"); },
+  }));
+  assert.equal(unauthenticated.status,401);
 });

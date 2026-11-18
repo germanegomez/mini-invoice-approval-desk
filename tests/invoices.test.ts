@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { InvoiceTable } from "../src/components/InvoiceTable";
+import { InvoiceHistoryTimeline } from "../src/components/InvoiceHistoryTimeline";
 import { decodeInvoiceCursor, encodeInvoiceCursor } from "../src/lib/invoices/cursor";
 import {
   getInvoiceDetail,
@@ -27,6 +28,8 @@ import { parseInvoiceFilters } from "../src/lib/invoices/validation";
 import type { InvoiceDetail, InvoiceStats, InvoiceSummary } from "../src/types/invoice";
 
 const headerRow = {
+  category: "NEEDS_REVIEW" as const, item_count: 1,
+  cursor_updated_at: "2026-11-02T10:00:00.000157Z",
   universal_raw_id: 41,
   extraction_revision: 3,
   processing_stage: "linked_duplicate" as const,
@@ -55,9 +58,10 @@ const headerRow = {
 
 const summary = mapInvoiceSummary(headerRow);
 const detail: InvoiceDetail = {
-  ...summary, items: [], task: null, humanOutcome: null, continuation: null,
+  ...summary, allowedActions: [], history: [], items: [], task: null, humanOutcome: null, continuation: null,
 };
 const stats: InvoiceStats = {
+  categories: [],
   totalCount: 1,
   processingStages: [{ code: "linked_duplicate", count: 1 }],
   preparationStatuses: [{ code: "classified", count: 1 }],
@@ -79,7 +83,7 @@ function dependencies(overrides: Partial<InvoiceControllerDependencies> = {}): I
     resolveScope: async () => allInvoiceReadScope(),
     list: async () => ({ data: [summary], nextCursor: null }),
     detail: async () => detail,
-    filterOptions: async () => ({ processingStages: ["linked_duplicate"], preparationStatuses: ["classified"], currencies: ["ARS"] }),
+    filterOptions: async () => ({ processingStages: ["linked_duplicate"], preparationStatuses: ["classified"], vendors: [], currencies: ["ARS"] }),
     stats: async () => stats,
     audit: async () => undefined,
     createRequestId: () => "00000000-0000-4000-8000-000000000059",
@@ -158,6 +162,7 @@ test("list query uses the read view, ID scope and deterministic keyset without O
   const page = await listInvoices(query, invoiceIdsReadScope([41, 55]), { limit: 1 });
   assert.equal(page.data.length, 1);
   assert.ok(page.nextCursor);
+  assert.equal(decodeInvoiceCursor(page.nextCursor).updatedAt, headerRow.cursor_updated_at);
   assert.match(calls[0].text, /portal\.invoices_v1/);
   assert.match(calls[0].text, /updated_at DESC, i\.universal_raw_id DESC/);
   assert.doesNotMatch(calls[0].text, /OFFSET/i);
@@ -191,13 +196,46 @@ test("detail joins items to the exact current extraction revision and same scope
     cuenta_contable: null, updated_at: "2026-11-02T10:00:00.000Z",
   };
   const { query, calls } = queuedQuery([[headerRow], [item], [], [], []]);
-  const loaded = await getInvoiceDetail(query, invoiceIdsReadScope([41]), 41);
+  const loaded = await getInvoiceDetail(query, invoiceIdsReadScope([41]), 41, "7");
   assert.equal(loaded?.items[0].lineNumber, 1);
   assert.equal(loaded?.items[0].description, null);
   assert.match(calls[1].text, /portal\.invoice_items_v1/);
   assert.match(calls[1].text, /i\.extraction_revision = item\.extraction_revision/);
   assert.deepEqual(calls[1].parameters, [[41], 41, 3]);
   assert.equal(loaded?.task, null);
+  assert.deepEqual(loaded?.history, []);
+});
+
+test("history is detail-only, scoped to the invoice, and exposes only business fields", async () => {
+  const event = {
+    action: "reject_final", stage: "direction_approval", occurred_at: "2026-11-02T10:00:00Z",
+    actor: "Synthetic reviewer", reason: "Synthetic note", revision: "2", from_status: "claimed",
+    to_status: "completed", invalidated: false, request_id: "private", actor_user_id: 7,
+  };
+  const { query, calls } = queuedQuery([[headerRow], [], [], [], [], [], [event]]);
+  const loaded = await getInvoiceDetail(query, invoiceIdsReadScope([41, 55]), 41, "7");
+  assert.deepEqual(calls.at(-1)?.parameters, [41, [41, 55]]);
+  assert.deepEqual(loaded?.history, [{
+    title: "Dirección · Rechazo definitivo", occurredAt: "2026-11-02T10:00:00.000Z",
+    actor: "Synthetic reviewer", reason: "Synthetic note", revision: 2, fromStatus: "Tomada",
+    toStatus: "Completada", invalidated: false,
+  }]);
+  assert.equal("history" in summary, false);
+  const miss = queuedQuery([[]]);
+  assert.equal(await getInvoiceDetail(miss.query, invoiceIdsReadScope([55]), 41, "7"), null);
+  assert.equal(miss.calls.length, 1);
+});
+
+test("timeline has an explicit empty state and omits absent actor, reason and transitions", () => {
+  const render = (events: InvoiceDetail["history"]) =>
+    renderToStaticMarkup(createElement(InvoiceHistoryTimeline, {events, currentRevision: 3}));
+  assert.match(render([]), /Sin eventos de auditoría visibles/);
+  const entry = render([{
+    title: "Nueva revisión del comprobante", occurredAt: "2026-11-02T10:00:00.000Z",
+    actor: null, reason: null, revision: 3, fromStatus: null, toStatus: null, invalidated: false,
+  }]);
+  assert.match(entry, /Nueva revisión del comprobante/);
+  assert.doesNotMatch(entry, /Actor:|“|Sin eventos|Invalidada por/);
 });
 
 test("stats apply the same scope and keep currencies and invalid values separate", async () => {
@@ -207,8 +245,8 @@ test("stats apply the same scope and keep currencies and invalid values separate
     if (text.includes("processing_stage AS code")) return [{ code: "processed", count: "2" }] as unknown as T[];
     if (text.includes("preparation_status AS code")) return [{ code: "posted", count: "2" }] as unknown as T[];
     return [
-      { currency: "ARS", amount: "100.00", included_count: "1", excluded_count: "1" },
-      { currency: null, amount: null, included_count: "0", excluded_count: "1" },
+      { category: null, currency: "ARS", amount: "100.00", included_count: "1", excluded_count: "1" },
+      { category: null, currency: null, amount: null, included_count: "0", excluded_count: "1" },
     ] as unknown as T[];
   }) as QueryExecutor;
   const result = await getInvoiceStats(query, invoiceIdsReadScope([41, 55]));
@@ -237,8 +275,8 @@ test("authorized all and configured empty ID scopes return an empty dashboard pa
       dependencies({
         resolveScope: async () => scope,
         list: async (value) => { received.push(value); return { data: [], nextCursor: null }; },
-        filterOptions: async (value) => { received.push(value); return { processingStages: [], preparationStatuses: [], currencies: [] }; },
-        stats: async (value) => { received.push(value); return { totalCount: 0, processingStages: [], preparationStatuses: [], currencyTotals: [] }; },
+        filterOptions: async (value) => { received.push(value); return { processingStages: [], preparationStatuses: [], vendors: [], currencies: [] }; },
+        stats: async (value) => { received.push(value); return { categories: [], totalCount: 0, processingStages: [], preparationStatuses: [], currencyTotals: [] }; },
       }),
     );
     assert.equal(response.status, 200);
@@ -278,7 +316,7 @@ test("list, filter options and indicators receive the exact same server scope", 
     dependencies({
       resolveScope: async () => scope,
       list: async (value) => { received.push(value); return { data: [summary], nextCursor: null }; },
-      filterOptions: async (value) => { received.push(value); return { processingStages: [], preparationStatuses: [], currencies: [] }; },
+      filterOptions: async (value) => { received.push(value); return { processingStages: [], preparationStatuses: [], vendors: [], currencies: [] }; },
       stats: async (value) => { received.push(value); return stats; },
     }),
   );
@@ -322,7 +360,7 @@ test("audit SQL stores only actor, invoice ID, bounded result and request ID", a
   assert.doesNotMatch(calls[0].text, /cuit|importe|filter|document|reason/i);
 });
 
-test("UI renders integer identity, current revision and real invoice processing states", () => {
+test("ledger shows the natural key and display category and keeps internal identity in detail", () => {
   const html = renderToStaticMarkup(
     createElement(InvoiceTable, {
       invoices: [summary as InvoiceSummary],
@@ -331,23 +369,23 @@ test("UI renders integer identity, current revision and real invoice processing 
       selectedInvoiceId: 41,
     }),
   );
-  assert.match(html, /ID 41/);
-  assert.match(html, /rev\. 3/);
-  assert.match(html, /linked duplicate/i);
-  assert.match(html, /classified/i);
-  assert.doesNotMatch(html, /APPROVED|NEEDS_REVIEW/);
+  assert.match(html, /0001-00000042/);
+  assert.match(html, /needs review/i);
+  assert.match(html, /duplicate/i);
+  assert.doesNotMatch(html, /ID 41|rev\. 3|classified/);
 });
 
 test("UI renders an authorized empty inbox without authorization details", () => {
   const html = renderToStaticMarkup(
     createElement(InvoiceTable, {
       invoices: [],
+      emptyScope: true,
       isLoading: false,
       onSelectInvoice: () => undefined,
       selectedInvoiceId: null,
     }),
   );
-  assert.match(html, /Bandeja vacía/);
-  assert.match(html, /No hay facturas disponibles/);
+  assert.match(html, /No invoices found/);
+  assert.match(html, /There are no invoices available in your inbox/);
   assert.doesNotMatch(html, /access.denied|correo|subject|token|claim/i);
 });

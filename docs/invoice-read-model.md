@@ -24,6 +24,20 @@ back to the header view using the exact `(universal_raw_id,
 extraction_revision)` pair. It never accepts a revision from the client. Missing,
 superseded, and out-of-scope details are deliberately indistinguishable.
 
+### Invoice history
+
+The detail response includes a newest-first history for the authorized invoice across
+its revisions. It reads accepted task decisions, their correction invalidations,
+recorded post-approval transitions, document links visible on both sides, and successful
+revision-change events. Equal timestamps are ordered by source and descending numeric
+event ID. A task transition describes the task at the time of the decision. A change
+to a current status field alone does not establish a historical transition.
+
+The timeline exposes a display name and decision or link reason when available.
+Access attempts, authentication, replay diagnostics, request IDs, worker metadata
+and audit payloads stay out of the projection. An empty array means the invoice
+has no visible business events. An unsuccessful detail query returns an error.
+
 ## Query validation
 
 Accepted list parameters are:

@@ -17,7 +17,7 @@ export const invoiceControllerDependencies: InvoiceControllerDependencies = {
   authenticate: requireAuthenticatedUser,
   resolveScope: resolveInvoiceReadScope,
   list: (scope, filters) => listInvoices(postgresQuery, scope, filters),
-  detail: (scope, id) => getInvoiceDetail(postgresQuery, scope, id),
+  detail: (scope, id, actor) => getInvoiceDetail(postgresQuery, scope, id, actor),
   filterOptions: (scope) => getFilterOptions(postgresQuery, scope),
   stats: (scope) => getInvoiceStats(postgresQuery, scope),
   audit: (actor, id, result, requestId) =>

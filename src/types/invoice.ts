@@ -30,7 +30,20 @@ export const PREPARATION_STATUSES = [
 export type ProcessingStage = (typeof PROCESSING_STAGES)[number];
 export type PreparationStatus = (typeof PREPARATION_STATUSES)[number];
 
+export const DISPLAY_CATEGORIES = ["PROCESSING", "NEEDS_REVIEW", "APPROVED", "REJECTED"] as const;
+export type DisplayCategory = (typeof DISPLAY_CATEGORIES)[number];
+export const INVOICE_TABS = ["processing", "needs_review", "approved_rejected"] as const;
+export type TabType = (typeof INVOICE_TABS)[number];
+
+export interface CategoryStats {
+  code: DisplayCategory;
+  count: number;
+  currencyTotals: CurrencyTotal[];
+}
+
 export interface InvoiceSummary {
+  category: DisplayCategory;
+  itemCount: number;
   universalRawId: number;
   extractionRevision: number;
   processingStage: ProcessingStage;
@@ -77,10 +90,23 @@ export interface InvoiceItem {
 }
 
 export interface InvoiceDetail extends InvoiceSummary {
+  history: InvoiceHistoryEvent[];
+  allowedActions: string[];
   items: InvoiceItem[];
   task: HumanTask | null;
   humanOutcome: HumanOutcome | null;
   continuation: PostApprovalJob | null;
+}
+
+export interface InvoiceHistoryEvent {
+  title: string;
+  occurredAt: string;
+  actor: string | null;
+  reason: string | null;
+  revision: number | null;
+  fromStatus: string | null;
+  toStatus: string | null;
+  invalidated: boolean;
 }
 
 export type HumanTaskStage =
@@ -125,6 +151,8 @@ export interface PostApprovalJob {
 }
 
 export interface InvoiceFilters {
+  tab?: TabType;
+  vendor?: string;
   processingStage?: ProcessingStage;
   preparationStatus?: PreparationStatus;
   currency?: string;
@@ -136,6 +164,7 @@ export interface InvoiceFilters {
 }
 
 export interface FilterOptions {
+  vendors: string[];
   processingStages: ProcessingStage[];
   preparationStatuses: PreparationStatus[];
   currencies: string[];
@@ -154,6 +183,7 @@ export interface CurrencyTotal {
 }
 
 export interface InvoiceStats {
+  categories: CategoryStats[];
   totalCount: number;
   processingStages: StageCount[];
   preparationStatuses: StageCount[];

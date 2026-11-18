@@ -5,17 +5,38 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(amount: number | string | null | undefined, currency = "USD"): string {
-  if (amount === null || amount === undefined || amount === "") return "—";
-  const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  if (isNaN(num)) return "—";
+const moneyFormat = new Intl.NumberFormat("es-AR", {
+  style: "currency",
+  currency: "ARS",
+  currencyDisplay: "code",
+  useGrouping: "always",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(num);
+export function currencyLabel(currency: string | null | undefined): string {
+  if (!currency || !/^[A-Z]{3}$/.test(currency)) return "—";
+  return currency === "ARS" ? "$" : currency;
+}
+
+export function formatItemQuantity(quantity: string | null, unit: string | null): string {
+  if (quantity == null) return "—";
+  return unit && unit !== "unidad" ? `${quantity} ${unit}` : quantity;
+}
+
+function isDecimal(value: string): value is `${number}` {
+  return /^-?\d+(?:\.\d+)?$/.test(value);
+}
+
+export function formatCurrency(amount: number | string | null | undefined, currency: string | null): string {
+  const label = currencyLabel(currency);
+  if (label === "—" || amount == null) return "—";
+  if (typeof amount === "string" && !isDecimal(amount)) return "—";
+  if (typeof amount === "number" && !Number.isFinite(amount)) return "—";
+  return moneyFormat.formatToParts(amount)
+    .filter(part => !(currency === "ARS" && part.type === "literal" && part.value.trim() === ""))
+    .map(part => part.type === "currency" ? label : part.value)
+    .join("");
 }
 
 export function formatDate(date: Date | string | null | undefined): string {
@@ -47,6 +68,7 @@ export function formatDateTime(date: Date | string | null | undefined): string {
 
 export function getStatusConfig(status: string) {
   switch (status) {
+    case "APPROVED":
     case "processed":
     case "posted":
       return {
@@ -54,6 +76,7 @@ export function getStatusConfig(status: string) {
         bg: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
         dot: "bg-emerald-400",
       };
+    case "NEEDS_REVIEW":
     case "requires_human_review":
     case "awaiting_classification":
     case "extracted":
@@ -68,6 +91,7 @@ export function getStatusConfig(status: string) {
         bg: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
         dot: "bg-amber-400",
       };
+    case "REJECTED":
     case "rejected":
     case "error":
       return {
