@@ -25,7 +25,7 @@ export function KPIBar({ stats }: KPIBarProps) {
       borderColor: "border-amber-500/30 dark:border-amber-500/30",
       accentBg: "bg-amber-500/10",
       textColor: "text-amber-600 dark:text-amber-400",
-      subtext: "Awaiting human review",
+      subtext: "Includes flagged duplicates",
       pulse: true,
     },
     {
@@ -35,7 +35,7 @@ export function KPIBar({ stats }: KPIBarProps) {
       borderColor: "border-emerald-500/20 dark:border-emerald-500/20",
       accentBg: "bg-emerald-500/10",
       textColor: "text-emerald-600 dark:text-emerald-400",
-      subtext: "Human approval complete",
+      subtext: "Ready for payment",
     },
     {
       title: "Rejected",
