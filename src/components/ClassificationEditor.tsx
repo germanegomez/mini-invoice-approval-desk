@@ -8,6 +8,7 @@ import type { ClassificationCatalogs } from "@/lib/tasks/repository";
 import { emptyAssignment, invalidField, sameAssignment, type Assignment, type Field } from "@/lib/tasks/classification";
 import { formatCurrency } from "@/lib/utils";
 import { ClassificationFields } from "./ClassificationFields";
+import { InvoiceTotal } from "./InvoiceTotal";
 import { BulkClassification, secondaryButton } from "./BulkClassification";
 
 export interface DraftHandle { dirty: boolean; busy: boolean; save(): Promise<boolean>; discard(): void }
@@ -126,34 +127,36 @@ export function ClassificationEditor({ invoice, onChanged, onDirtyChange, ref }:
     <fieldset disabled={busy} className="min-w-0 space-y-3">
       {catalog && bulk && <BulkClassification items={items} values={values} catalog={catalog} onClose={() => setBulk(false)} onApply={(lines, value) => editLines(lines, value, true)} />}
       {undo && <button type="button" className="text-xs underline" onClick={() => { setEdits(undo); setUndo(null); setNotice("Aplicación en bloque deshecha."); }}>Deshacer aplicación</button>}
-      <ol className="divide-y divide-zinc-200 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-        {items.map((item, index) => {
-          const n = item.lineNumber, expanded = n === openLine, value = values[index];
-          const groupId = prefix + "-" + n;
-          return <li key={n} className="p-3">
-            <button type="button" className="flex w-full items-start justify-between gap-3 rounded text-left focus-visible:ring-2 focus-visible:ring-amber-500"
-              aria-label={"Editar línea " + n} aria-expanded={expanded} aria-controls={expanded ? groupId : undefined}
-              disabled={!catalog} onClick={() => setOpenLine(expanded ? null : n)}>
-              <span className="min-w-0">
-                <span className="block font-mono text-[11px] text-zinc-600 dark:text-zinc-400">Línea {n}{item.code && " · " + item.code}</span>
-                <span className="block break-words text-sm font-medium">{item.description || "Sin descripción"}</span>
-                <span className="block text-xs text-zinc-600 dark:text-zinc-400">{[item.quantity && "Cant. " + item.quantity, item.unit, item.unitPrice && money(item.unitPrice) + " c/u", item.vatCategory, item.vatRate].filter(Boolean).join(" · ")}</span>
-              </span>
-              <span className="shrink-0 text-right"><span className="block font-mono text-xs font-semibold">{money(item.totalWithVat ?? item.subtotal)}</span>
-                <span className="mt-1 flex items-center justify-end gap-1 text-xs text-zinc-600 dark:text-zinc-400">
-                  {expanded ? <>Cerrar <ChevronUp aria-hidden size={14} /></> : <>Editar <ChevronDown aria-hidden size={14} /></>}</span></span>
-            </button>
-            {!expanded && !sameAssignment(value, emptyAssignment) && <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{[value.costCenter, value.subCostCenter, value.accountingAccount].filter(Boolean).join(" · ")}</p>}
-            {expanded && catalog && <div id={groupId} className="mt-3 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
-              <ClassificationFields value={value} catalog={catalog} groupId={groupId} error={error?.line === n ? error.field : undefined}
-                onChange={next => editLines([n], next)} />
-              {error?.line === n && <p id={groupId + "-" + error.field + "-error"} role="alert" className="mt-2 text-xs text-rose-700 dark:text-rose-300">
-                Línea {n} · {item.description}. {requiredMessages[error.field]}</p>}
-            </div>}
-          </li>;
-        })}
-      </ol>
-      <div className="flex justify-between font-mono text-sm font-bold"><span>Total</span><span>{money(invoice.totalAmount)}</span></div>
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <ol className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          {items.map((item, index) => {
+            const n = item.lineNumber, expanded = n === openLine, value = values[index];
+            const groupId = prefix + "-" + n;
+            return <li key={n} className="p-3">
+              <button type="button" className="flex w-full items-start justify-between gap-3 rounded text-left focus-visible:ring-2 focus-visible:ring-amber-500"
+                aria-label={"Editar línea " + n} aria-expanded={expanded} aria-controls={expanded ? groupId : undefined}
+                disabled={!catalog} onClick={() => setOpenLine(expanded ? null : n)}>
+                <span className="min-w-0">
+                  <span className="block font-mono text-[11px] text-zinc-600 dark:text-zinc-400">Línea {n}{item.code && " · " + item.code}</span>
+                  <span className="block break-words text-sm font-medium">{item.description || "Sin descripción"}</span>
+                  <span className="block text-xs text-zinc-600 dark:text-zinc-400">{[item.quantity && "Cant. " + item.quantity, item.unit, item.unitPrice && money(item.unitPrice) + " c/u", item.vatCategory, item.vatRate].filter(Boolean).join(" · ")}</span>
+                </span>
+                <span className="shrink-0 text-right"><span className="block font-mono text-xs font-semibold">{money(item.totalWithVat ?? item.subtotal)}</span>
+                  <span className="mt-1 flex items-center justify-end gap-1 text-xs text-zinc-600 dark:text-zinc-400">
+                    {expanded ? <>Cerrar <ChevronUp aria-hidden size={14} /></> : <>Editar <ChevronDown aria-hidden size={14} /></>}</span></span>
+              </button>
+              {!expanded && !sameAssignment(value, emptyAssignment) && <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{[value.costCenter, value.subCostCenter, value.accountingAccount].filter(Boolean).join(" · ")}</p>}
+              {expanded && catalog && <div id={groupId} className="mt-3 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
+                <ClassificationFields value={value} catalog={catalog} groupId={groupId} error={error?.line === n ? error.field : undefined}
+                  onChange={next => editLines([n], next)} />
+                {error?.line === n && <p id={groupId + "-" + error.field + "-error"} role="alert" className="mt-2 text-xs text-rose-700 dark:text-rose-300">
+                  Línea {n} · {item.description}. {requiredMessages[error.field]}</p>}
+              </div>}
+            </li>;
+          })}
+        </ol>
+        <InvoiceTotal>{money(invoice.totalAmount)}</InvoiceTotal>
+      </div>
       <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-2 border-t border-zinc-200 bg-white py-2 dark:border-zinc-800 dark:bg-zinc-950">
         {canSave && <button type="button" className={secondaryButton} disabled={!catalog || !dirty} onClick={() => void save()}>Guardar borrador</button>}
         {canComplete && <button type="button" className="rounded-md bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"

@@ -9,6 +9,7 @@ import { currencyLabel, formatCurrency, formatDate, formatDateTime } from "@/lib
 import { StatusBadge, DuplicateBadge } from "./StatusBadge";
 import { TaskActionPanel } from "./TaskActionPanel";
 import { InvoiceHistoryTimeline } from "./InvoiceHistoryTimeline";
+import { InvoiceTotal } from "./InvoiceTotal";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "./ui/sheet";
 import { FileText, X } from "lucide-react";
 
@@ -154,9 +155,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
                   </table>
                 </div>
 
-                <div className="flex justify-between border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/70 p-3 sm:p-4 font-mono text-sm font-bold">
-                  <span>Total</span><span>{money(invoice.totalAmount)}</span>
-                </div>
+                <InvoiceTotal>{money(invoice.totalAmount)}</InvoiceTotal>
               </div>
             </div>}
             {!accounting && taskPanel}
