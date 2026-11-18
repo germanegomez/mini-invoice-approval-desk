@@ -28,6 +28,7 @@ import type { InvoiceDetail, InvoiceStats, InvoiceSummary } from "../src/types/i
 
 const headerRow = {
   category: "NEEDS_REVIEW" as const, item_count: 1,
+  cursor_updated_at: "2026-11-02T10:00:00.000157Z",
   universal_raw_id: 41,
   extraction_revision: 3,
   processing_stage: "linked_duplicate" as const,
@@ -160,6 +161,7 @@ test("list query uses the read view, ID scope and deterministic keyset without O
   const page = await listInvoices(query, invoiceIdsReadScope([41, 55]), { limit: 1 });
   assert.equal(page.data.length, 1);
   assert.ok(page.nextCursor);
+  assert.equal(decodeInvoiceCursor(page.nextCursor).updatedAt, headerRow.cursor_updated_at);
   assert.match(calls[0].text, /portal\.invoices_v1/);
   assert.match(calls[0].text, /updated_at DESC, i\.universal_raw_id DESC/);
   assert.doesNotMatch(calls[0].text, /OFFSET/i);

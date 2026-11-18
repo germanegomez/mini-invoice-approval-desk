@@ -28,6 +28,7 @@ export interface QueryExecutor {
 }
 
 interface HeaderRow extends Record<string, unknown> {
+  cursor_updated_at: string;
   category: DisplayCategory;
   item_count: number | string;
   universal_raw_id: number;
@@ -107,6 +108,7 @@ interface ContinuationRow extends Record<string, unknown> {
 }
 
 const HEADER_COLUMNS = `
+  to_char(i.updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_updated_at,
   ${categorySql} AS category,
   (SELECT count(*) FROM portal.invoice_items_v1 line WHERE line.universal_raw_id = i.universal_raw_id
      AND line.extraction_revision = i.extraction_revision) AS item_count,
@@ -260,8 +262,8 @@ function scopedWhere(
     const updatedAt = pushParameter(parts, cursor.updatedAt);
     const universalRawId = pushParameter(parts, cursor.universalRawId);
     parts.clauses.push(`(
-      ${alias}.updated_at < ${updatedAt}::timestamptz
-      OR (${alias}.updated_at = ${updatedAt}::timestamptz AND ${alias}.universal_raw_id < ${universalRawId})
+      ${alias}.updated_at < (${updatedAt}::timestamptz AT TIME ZONE 'UTC')
+      OR (${alias}.updated_at = (${updatedAt}::timestamptz AT TIME ZONE 'UTC') AND ${alias}.universal_raw_id < ${universalRawId})
     )`);
   }
   return parts;
@@ -288,11 +290,11 @@ export async function listInvoices(
   `, parts.parameters);
   const hasNextPage = rows.length > filters.limit;
   const visible = rows.slice(0, filters.limit).map(mapInvoiceSummary);
-  const last = hasNextPage ? visible.at(-1) : undefined;
+  const last = hasNextPage ? rows[filters.limit - 1] : undefined;
   return {
     data: visible,
     nextCursor: last
-      ? encodeInvoiceCursor({ updatedAt: last.updatedAt, universalRawId: last.universalRawId })
+      ? encodeInvoiceCursor({ updatedAt: last.cursor_updated_at, universalRawId: Number(last.universal_raw_id) })
       : null,
   };
 }
