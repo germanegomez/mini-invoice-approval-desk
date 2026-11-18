@@ -90,11 +90,23 @@ export interface InvoiceItem {
 }
 
 export interface InvoiceDetail extends InvoiceSummary {
+  history: InvoiceHistoryEvent[];
   allowedActions: string[];
   items: InvoiceItem[];
   task: HumanTask | null;
   humanOutcome: HumanOutcome | null;
   continuation: PostApprovalJob | null;
+}
+
+export interface InvoiceHistoryEvent {
+  title: string;
+  occurredAt: string;
+  actor: string | null;
+  reason: string | null;
+  revision: number | null;
+  fromStatus: string | null;
+  toStatus: string | null;
+  invalidated: boolean;
 }
 
 export type HumanTaskStage =

@@ -4,6 +4,7 @@ import type { InvoiceDetail } from "@/types/invoice";
 import { currencyLabel, formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { StatusBadge, DuplicateBadge } from "./StatusBadge";
 import { TaskActionPanel } from "./TaskActionPanel";
+import { InvoiceHistoryTimeline } from "./InvoiceHistoryTimeline";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "./ui/sheet";
 import { FileText, X } from "lucide-react";
 
@@ -139,6 +140,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
               </div>
             </div>
             <TaskActionPanel key={`${invoice.universalRawId}-${invoice.extractionRevision}-${invoice.task?.updatedAt ?? "none"}`} invoice={invoice} onChanged={onChanged} />
+            <InvoiceHistoryTimeline events={invoice.history} currentRevision={invoice.extractionRevision} />
             <details className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 text-xs font-mono">
               <summary className="cursor-pointer">Detalle técnico</summary>
               <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 break-words">

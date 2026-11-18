@@ -1,5 +1,6 @@
 import { availableActions, type PermissionRow } from "@/lib/tasks/available-actions";
 import { categorySql, tabCategories } from "./presentation";
+import { readInvoiceHistory } from "./history";
 import { DISPLAY_CATEGORIES } from "@/types/invoice";
 import type { InvoiceReadScope } from "./scope";
 import { decodeInvoiceCursor, encodeInvoiceCursor } from "./cursor";
@@ -409,7 +410,8 @@ export async function getInvoiceDetail(
       JOIN portal.permissions permission ON permission.id = bundle.permission_id AND permission.active
      WHERE u.id = $1 AND u.enabled
   `, [actor]);
-  const invoice = { ...mapInvoiceSummary(header), items: items.map(mapInvoiceItem), task, humanOutcome, continuation };
+  const history = await readInvoiceHistory(query, scope, universalRawId);
+  const invoice = { ...mapInvoiceSummary(header), items: items.map(mapInvoiceItem), task, humanOutcome, continuation, history };
   const sourceAssignee = outcomeRow?.source_assignee;
   return { ...invoice, allowedActions: availableActions(invoice, actor, permissions, sourceAssignee == null ? null : String(sourceAssignee)) };
 }

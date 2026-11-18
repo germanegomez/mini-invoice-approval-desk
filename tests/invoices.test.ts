@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { InvoiceTable } from "../src/components/InvoiceTable";
+import { InvoiceHistoryTimeline } from "../src/components/InvoiceHistoryTimeline";
 import { decodeInvoiceCursor, encodeInvoiceCursor } from "../src/lib/invoices/cursor";
 import {
   getInvoiceDetail,
@@ -57,7 +58,7 @@ const headerRow = {
 
 const summary = mapInvoiceSummary(headerRow);
 const detail: InvoiceDetail = {
-  ...summary, allowedActions: [], items: [], task: null, humanOutcome: null, continuation: null,
+  ...summary, allowedActions: [], history: [], items: [], task: null, humanOutcome: null, continuation: null,
 };
 const stats: InvoiceStats = {
   categories: [],
@@ -202,6 +203,39 @@ test("detail joins items to the exact current extraction revision and same scope
   assert.match(calls[1].text, /i\.extraction_revision = item\.extraction_revision/);
   assert.deepEqual(calls[1].parameters, [[41], 41, 3]);
   assert.equal(loaded?.task, null);
+  assert.deepEqual(loaded?.history, []);
+});
+
+test("history is detail-only, scoped to the invoice, and exposes only business fields", async () => {
+  const event = {
+    action: "reject_final", stage: "direction_approval", occurred_at: "2026-11-02T10:00:00Z",
+    actor: "Synthetic reviewer", reason: "Synthetic note", revision: "2", from_status: "claimed",
+    to_status: "completed", invalidated: false, request_id: "private", actor_user_id: 7,
+  };
+  const { query, calls } = queuedQuery([[headerRow], [], [], [], [], [], [event]]);
+  const loaded = await getInvoiceDetail(query, invoiceIdsReadScope([41, 55]), 41, "7");
+  assert.deepEqual(calls.at(-1)?.parameters, [41, [41, 55]]);
+  assert.deepEqual(loaded?.history, [{
+    title: "Dirección · Rechazo definitivo", occurredAt: "2026-11-02T10:00:00.000Z",
+    actor: "Synthetic reviewer", reason: "Synthetic note", revision: 2, fromStatus: "Tomada",
+    toStatus: "Completada", invalidated: false,
+  }]);
+  assert.equal("history" in summary, false);
+  const miss = queuedQuery([[]]);
+  assert.equal(await getInvoiceDetail(miss.query, invoiceIdsReadScope([55]), 41, "7"), null);
+  assert.equal(miss.calls.length, 1);
+});
+
+test("timeline has an explicit empty state and omits absent actor, reason and transitions", () => {
+  const render = (events: InvoiceDetail["history"]) =>
+    renderToStaticMarkup(createElement(InvoiceHistoryTimeline, {events, currentRevision: 3}));
+  assert.match(render([]), /Sin eventos de auditoría visibles/);
+  const entry = render([{
+    title: "Nueva revisión del comprobante", occurredAt: "2026-11-02T10:00:00.000Z",
+    actor: null, reason: null, revision: 3, fromStatus: null, toStatus: null, invalidated: false,
+  }]);
+  assert.match(entry, /Nueva revisión del comprobante/);
+  assert.doesNotMatch(entry, /Actor:|“|Sin eventos|Invalidada por/);
 });
 
 test("stats apply the same scope and keep currencies and invalid values separate", async () => {
