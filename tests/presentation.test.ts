@@ -23,17 +23,18 @@ test("currency cards distinguish missing, zero, invalid and multiple amounts", (
   const card = (totals: CurrencyTotal[]) => renderToStaticMarkup(createElement(KPIBar, {
     stats: [{code: "APPROVED", count: 12, currencyTotals:totals}],
   }));
-  assert.match(card([money("ARS", "1234.50")]), /\$\s1\.234,50/);
+  assert.match(card([money("ARS", "5054.59")]), /\$5\.054,59/);
   const mixed = card([money("USD", "120.50"), money("ARS", "11.22")]);
-  assert.match(mixed, /\$\s11,22<\/div><div>USD\s120,50/);
+  assert.match(mixed, /\$11,22<\/div><div>USD\s120,50/);
   assert.equal(mixed.match(/12 invs/g)?.length, 1);
   assert.doesNotMatch(mixed, /131,72|Multiple currencies|ARS/);
   assert.match(card([money("USD", null)]), /USD —/);
   assert.match(card([money(null,null)]), /—/);
   assert.equal(formatCurrency("5oops","USD"), "—");
   assert.equal(formatCurrency("0.00", "USD"), "USD\u00a00,00");
-  assert.equal(formatCurrency("-1200.45", "ARS"), "-$\u00a01.200,45");
-  assert.equal(formatCurrency("9007199254740993.17", "ARS"), "$\u00a09.007.199.254.740.993,17");
+  assert.equal(formatCurrency("6528.94", "USD"), "USD\u00a06.528,94");
+  assert.equal(formatCurrency("-1200.45", "ARS"), "-$1.200,45");
+  assert.equal(formatCurrency("9007199254740993.17", "ARS"), "$9.007.199.254.740.993,17");
   assert.equal(formatCurrency("25.00", null), "—");
 });
 

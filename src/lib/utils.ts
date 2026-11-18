@@ -29,6 +29,7 @@ export function formatCurrency(amount: number | string | null | undefined, curre
   if (typeof amount === "string" && !isDecimal(amount)) return "—";
   if (typeof amount === "number" && !Number.isFinite(amount)) return "—";
   return moneyFormat.formatToParts(amount)
+    .filter(part => !(currency === "ARS" && part.type === "literal" && part.value.trim() === ""))
     .map(part => part.type === "currency" ? label : part.value)
     .join("");
 }
