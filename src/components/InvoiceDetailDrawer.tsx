@@ -148,6 +148,7 @@ export function InvoiceDetailDrawer({ invoice, open, onOpenChange, isLoading, on
                 <dt>Receptor</dt><dd>{[invoice.receiverName, invoice.receiverTaxId].filter(Boolean).join(" · ") || "—"}</dd>
                 <dt>Procesamiento</dt><dd>{invoice.processingStage}</dd>
                 <dt>Preparación</dt><dd>{invoice.preparationStatus}</dd>
+                {invoice.humanOutcome && <><dt>Código de cierre</dt><dd>{invoice.humanOutcome.outcome}</dd></>}
                 <dt>Clasificación completa</dt><dd>{invoice.classificationComplete ? "Sí" : "No"}</dd>
                 <dt>Actualizado</dt><dd>{formatDateTime(invoice.updatedAt)}</dd>
               </dl>

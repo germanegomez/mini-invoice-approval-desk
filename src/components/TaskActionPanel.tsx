@@ -1,8 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { InvoiceDetail } from "@/types/invoice";
+import { useEffect, useId, useState } from "react";
+import type { HumanOutcome, InvoiceDetail } from "@/types/invoice";
 import type { ClassificationCatalogs } from "@/lib/tasks/repository";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+
+const reviewResults: Record<HumanOutcome["outcome"], string> = {
+  ready_for_post_approval_processing: "Factura aprobada",
+  rejected_final: "Factura rechazada",
+  cancelled_internal: "Factura anulada internamente",
+  exception_closed: "Revisión cerrada por excepción",
+};
 
 interface ItemDraft {
   lineNumber: number;
@@ -32,7 +40,8 @@ export function TaskActionPanel({ invoice, onChanged }: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [catalogs, setCatalogs] = useState<ClassificationCatalogs | null>(null);
-  const [sectorRole, setSectorRole] = useState<"purchasing" | "maintenance" | "billing">("purchasing");
+  const sectorId = useId();
+  const [sectorRole, setSectorRole] = useState("purchasing");
   const [drafts, setDrafts] = useState<ItemDraft[]>(() => invoice.items.map((item) => ({
     lineNumber: item.lineNumber,
     costCenter: item.costCenter ?? "",
@@ -57,7 +66,7 @@ export function TaskActionPanel({ invoice, onChanged }: {
         sectorRole,
         idempotencyKey: crypto.randomUUID(),
       });
-      setMessage("Circuito humano iniciado."); await onChanged();
+      setMessage("Factura enviada a revisión."); await onChanged();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Error"); }
     finally { setBusy(false); }
   };
@@ -77,17 +86,33 @@ export function TaskActionPanel({ invoice, onChanged }: {
     finally { setBusy(false); }
   };
 
+  const canStart = !invoice.humanOutcome && can("task.start");
+  if (!task && !canStart && !invoice.humanOutcome && !invoice.continuation) return null;
   if (!task) return <section className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-900/60">
-    <div><h3 className="text-xs font-mono uppercase tracking-wider font-bold text-zinc-500 dark:text-zinc-400">Resultado humano</h3><p className="text-zinc-500">{invoice.humanOutcome?.outcome ?? "No hay una tarea humana abierta para esta revisión."}</p></div>
+    <div>
+      <h3 className="text-xs font-mono uppercase tracking-wider font-bold text-zinc-500 dark:text-zinc-400">Revisión de la factura</h3>
+      {invoice.humanOutcome && <p>{reviewResults[invoice.humanOutcome.outcome]}</p>}
+    </div>
     {invoice.continuation ? <div className="rounded border p-3">
       <h4 className="text-xs font-bold uppercase tracking-wide text-zinc-500">Procesamiento posterior a la aprobación</h4>
       <p className="mt-1 font-mono text-xs">{invoice.continuation.status} · intento {invoice.continuation.attempts}/3</p>
       {invoice.continuation.errorCode && <p className="mt-1 text-xs text-rose-600">{invoice.continuation.errorCode}: {invoice.continuation.errorDetail}</p>}
     </div> : can("continuation.enqueue") ?
       <button disabled={busy} className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 font-mono text-xs font-bold text-white" onClick={processApprovedInvoice}>Procesar factura aprobada</button> :
-      can("task.start") && <div className="flex flex-wrap items-end gap-2">
-        <label className="text-xs">Sector inicial<select className="ml-2 rounded border bg-transparent p-2" value={sectorRole} onChange={(event) => setSectorRole(event.target.value as typeof sectorRole)}><option value="purchasing">Compras</option><option value="maintenance">Mantenimiento</option><option value="billing">Facturación</option></select></label>
-        <button disabled={busy} className="rounded-lg bg-amber-500 hover:bg-amber-400 px-3 py-1.5 font-mono text-xs font-bold text-black" onClick={startCircuit}>Iniciar circuito</button>
+      canStart && <div className="space-y-2">
+        <p className="text-zinc-600 dark:text-zinc-300">Elegí el sector que va a revisar primero esta factura.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor={sectorId} className="text-xs">Sector</label>
+          <Select value={sectorRole} onValueChange={setSectorRole} disabled={busy}>
+            <SelectTrigger id={sectorId} className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="purchasing">Compras</SelectItem>
+              <SelectItem value="maintenance">Mantenimiento</SelectItem>
+              <SelectItem value="billing">Facturación</SelectItem>
+            </SelectContent>
+          </Select>
+          <button disabled={busy} className="rounded-lg bg-amber-500 hover:bg-amber-400 px-3 py-1.5 font-mono text-xs font-bold text-black" onClick={startCircuit}>Enviar a revisión</button>
+        </div>
       </div>}
     {message && <p className="text-xs">{message}</p>}
   </section>;
