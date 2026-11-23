@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { OriginalPreview } from "./OriginalPreview";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ClassificationEditor, type DraftHandle } from "./ClassificationEditor";
 import { secondaryButton } from "./BulkClassification";
@@ -11,7 +12,7 @@ import { TaskActionPanel } from "./TaskActionPanel";
 import { InvoiceHistoryTimeline } from "./InvoiceHistoryTimeline";
 import { InvoiceTotal } from "./InvoiceTotal";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "./ui/sheet";
-import { FileText, X } from "lucide-react";
+import { ExternalLink, Eye, FileText, X } from "lucide-react";
 
 function withoutTestPrefix(value: string | null) {
   return value?.replace(/^SYNTHETIC · /, "") ?? null;
@@ -26,6 +27,30 @@ export function InvoiceDetailDrawer({ invoice: source, open, onOpenChange, isLoa
   onChanged(): Promise<void> | void;
 }) {
   const editor = useRef<DraftHandle>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const lastField = useRef<HTMLElement | null>(null);
+  const [previewFor, setPreviewFor] = useState<string | null>(null);
+  const [missingFor, setMissingFor] = useState<string | null>(null);
+  const originalUrl = source?.hasOriginal ? `/api/invoices/${source.universalRawId}/original` : null;
+  const revisionKey = open && originalUrl ? originalUrl + "#" + source?.extractionRevision : null;
+  const preview = Boolean(revisionKey && previewFor === revisionKey && missingFor !== revisionKey);
+  const markMissing = useCallback(() => {
+    setMissingFor(revisionKey);
+    setPreviewFor(null);
+  }, [revisionKey]);
+  useEffect(() => {
+    if (!revisionKey || !originalUrl) return;
+    const controller = new AbortController();
+    fetch(originalUrl, { method: "HEAD", cache: "no-store", signal: controller.signal })
+      .then(result => { if (!controller.signal.aborted && result.status === 404) markMissing(); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [originalUrl, revisionKey, markMissing]);
+  function closePreview() {
+    setPreviewFor(null);
+    const field = lastField.current;
+    requestAnimationFrame(() => (field?.isConnected ? field : toggle.current)?.focus({ preventScroll: true }));
+  }
   const [nextAction, setNextAction] = useState<(() => void) | null>(null);
   const [saving, setSaving] = useState(false);
   // The review generator reserves this filename pattern and an all-zero recipient CUIT.
@@ -40,7 +65,7 @@ export function InvoiceDetailDrawer({ invoice: source, open, onOpenChange, isLoa
     if (editor.current?.dirty) setNextAction(() => action);
     else action();
   }
-  const onClose = () => guard(() => onOpenChange(false));
+  const onClose = () => guard(() => { setPreviewFor(null); setMissingFor(null); onOpenChange(false); });
   const accounting = invoice?.task?.stage === "accounting_classification";
   const canEdit = accounting && invoice.allowedActions.some(action => action === "classification.save" || action === "classification.complete");
   const taskPanel = invoice && <TaskActionPanel key={invoice.task?.id ?? "none"} invoice={invoice} guard={guard} onChanged={onChanged} />;
@@ -50,14 +75,15 @@ export function InvoiceDetailDrawer({ invoice: source, open, onOpenChange, isLoa
       <Sheet open={open} onOpenChange={value => { if (!value) onClose(); }}>
         <SheetContent
           onEscapeKeyDown={event => {
+            if (preview) { event.preventDefault(); closePreview(); return; }
             if (document.activeElement?.matches('input[role="combobox"][aria-expanded="true"]')) event.preventDefault();
           }}
           side="right"
-          className="top-0 right-0 h-[100dvh] max-h-[100dvh] w-full sm:max-w-xl md:max-w-2xl bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col p-0 overflow-hidden"
+          className={`top-0 right-0 h-[100dvh] max-h-[100dvh] w-full ${preview ? "sm:max-w-full md:w-[96vw] md:max-w-[1240px]" : "sm:max-w-xl md:max-w-2xl"} bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col gap-0 p-0 overflow-hidden`}
         >
           <SheetDescription className="sr-only">Review current invoice details and available actions.</SheetDescription>
           {/* Fixed Drawer Header (shrink-0) */}
-          <header className="border-b border-zinc-200 dark:border-zinc-800 px-3.5 sm:px-6 py-3 sm:py-4 bg-zinc-50 dark:bg-zinc-900/95 flex items-center justify-between shrink-0">
+          <header className={`px-3.5 sm:px-6 py-3 sm:py-4 bg-zinc-50 dark:bg-zinc-900/95 ${preview ? "hidden md:flex" : "flex"} items-center justify-between shrink-0`}>
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <div className="p-1.5 sm:p-2 rounded-lg bg-zinc-200 dark:bg-zinc-800 text-amber-500 border border-zinc-300 dark:border-zinc-700 shrink-0">
                 <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -84,9 +110,20 @@ export function InvoiceDetailDrawer({ invoice: source, open, onOpenChange, isLoa
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </header>
+          {invoice && <div className={`${preview ? "hidden md:flex" : "flex"} shrink-0 items-center gap-2 border-b bg-zinc-50 px-3.5 pb-3 sm:pl-[76px] dark:bg-zinc-900 text-xs font-semibold`}>
+            {originalUrl && missingFor !== revisionKey ? <>
+              <button ref={toggle} aria-expanded={preview} onClick={() => preview ? closePreview() : setPreviewFor(revisionKey)}
+                className="inline-flex items-center gap-2 rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-amber-900"><Eye size={16}/>{preview ? "Ocultar vista previa" : "Ver original"}</button>
+              <a href={originalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-md border px-3 py-2"><ExternalLink size={15}/>Abrir original</a>
+            </> : <span role="status">Original no disponible</span>}
+          </div>}
+          <div className="flex min-h-0 flex-1">
+          {preview && originalUrl && <OriginalPreview key={revisionKey} url={originalUrl} close={closePreview} missing={markMissing}/>}
 
           {!invoice && <p role="status" className="p-4 text-sm text-zinc-500">{isLoading ? "Loading invoice details..." : "Unable to load invoice details."}</p>}
-          {invoice && <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3.5 sm:px-6 py-3.5 sm:py-6 space-y-4 sm:space-y-6">
+          {invoice && <div key="detail" onFocusCapture={event => {
+            if (event.target.matches("input, select, textarea, [role=combobox]")) lastField.current = event.target;
+          }} className={`${preview ? "hidden md:block" : ""} min-w-0 flex-1 min-h-0 overflow-y-auto overscroll-contain px-3.5 sm:px-6 py-3.5 sm:py-6 space-y-4 sm:space-y-6`}>
             {invoice.processingStage === "linked_duplicate" && <DuplicateBadge />}
             {/* Vendor & General Metadata Grid */}
             <div className="grid grid-cols-2 gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-xs">
@@ -177,6 +214,7 @@ export function InvoiceDetailDrawer({ invoice: source, open, onOpenChange, isLoa
               </dl>
             </details>
           </div>}
+          </div>
           <Dialog.Root open={nextAction !== null} onOpenChange={value => { if (!value && !saving) setNextAction(null); }}>
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/50" />

@@ -58,6 +58,7 @@ const headerRow = {
 
 const summary = mapInvoiceSummary(headerRow);
 const detail: InvoiceDetail = {
+  hasOriginal: false,
   ...summary, allowedActions: [], history: [], items: [], task: null, humanOutcome: null, continuation: null,
 };
 const stats: InvoiceStats = {

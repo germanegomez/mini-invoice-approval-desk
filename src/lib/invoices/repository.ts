@@ -308,8 +308,9 @@ export async function getInvoiceDetail(
 ): Promise<InvoiceDetail | null> {
   const headerParts = scopedWhere(scope);
   headerParts.clauses.push(`i.universal_raw_id = ${pushParameter(headerParts, universalRawId)}`);
+  const actorParameter = pushParameter(headerParts, actor);
   const headers = await query<HeaderRow>(`
-    SELECT ${HEADER_COLUMNS}
+    SELECT ${HEADER_COLUMNS}, portal.invoice_original_id(${actorParameter}::bigint, i.universal_raw_id) IS NOT NULL AS has_original
       FROM portal.invoices_v1 i
      WHERE ${headerParts.clauses.join(" AND ")}
      LIMIT 1
@@ -403,7 +404,8 @@ export async function getInvoiceDetail(
   } : null;
   const permissions = await readActorPermissions(query, actor);
   const history = await readInvoiceHistory(query, scope, universalRawId);
-  const invoice = { ...mapInvoiceSummary(header), items: items.map(mapInvoiceItem), task, humanOutcome, continuation, history };
+  const invoice = { ...mapInvoiceSummary(header), hasOriginal: header.has_original === true,
+    items: items.map(mapInvoiceItem), task, humanOutcome, continuation, history };
   const sourceAssignee = outcomeRow?.source_assignee;
   return { ...invoice, allowedActions: availableActions(invoice, actor, permissions, sourceAssignee == null ? null : String(sourceAssignee)) };
 }
