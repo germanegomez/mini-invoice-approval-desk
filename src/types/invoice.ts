@@ -90,6 +90,7 @@ export interface InvoiceItem {
 }
 
 export interface InvoiceDetail extends InvoiceSummary {
+  hasOriginal: boolean;
   history: InvoiceHistoryEvent[];
   allowedActions: string[];
   items: InvoiceItem[];
