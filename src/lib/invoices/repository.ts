@@ -310,7 +310,7 @@ export async function getInvoiceDetail(
   headerParts.clauses.push(`i.universal_raw_id = ${pushParameter(headerParts, universalRawId)}`);
   const actorParameter = pushParameter(headerParts, actor);
   const headers = await query<HeaderRow>(`
-    SELECT ${HEADER_COLUMNS}, portal.invoice_original_id(${actorParameter}::bigint, i.universal_raw_id) IS NOT NULL AS has_original
+    SELECT ${HEADER_COLUMNS}, portal.invoice_original_link(${actorParameter}::bigint, i.universal_raw_id) IS NOT NULL AS has_original
       FROM portal.invoices_v1 i
      WHERE ${headerParts.clauses.join(" AND ")}
      LIMIT 1

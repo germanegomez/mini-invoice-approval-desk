@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { OriginalPreview } from "./OriginalPreview";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ClassificationEditor, type DraftHandle } from "./ClassificationEditor";
@@ -30,22 +30,9 @@ export function InvoiceDetailDrawer({ invoice: source, open, onOpenChange, isLoa
   const toggle = useRef<HTMLButtonElement>(null);
   const lastField = useRef<HTMLElement | null>(null);
   const [previewFor, setPreviewFor] = useState<string | null>(null);
-  const [missingFor, setMissingFor] = useState<string | null>(null);
   const originalUrl = source?.hasOriginal ? `/api/invoices/${source.universalRawId}/original` : null;
   const revisionKey = open && originalUrl ? originalUrl + "#" + source?.extractionRevision : null;
-  const preview = Boolean(revisionKey && previewFor === revisionKey && missingFor !== revisionKey);
-  const markMissing = useCallback(() => {
-    setMissingFor(revisionKey);
-    setPreviewFor(null);
-  }, [revisionKey]);
-  useEffect(() => {
-    if (!revisionKey || !originalUrl) return;
-    const controller = new AbortController();
-    fetch(originalUrl, { method: "HEAD", cache: "no-store", signal: controller.signal })
-      .then(result => { if (!controller.signal.aborted && result.status === 404) markMissing(); })
-      .catch(() => {});
-    return () => controller.abort();
-  }, [originalUrl, revisionKey, markMissing]);
+  const preview = Boolean(revisionKey && previewFor === revisionKey);
   function closePreview() {
     setPreviewFor(null);
     const field = lastField.current;
@@ -65,7 +52,7 @@ export function InvoiceDetailDrawer({ invoice: source, open, onOpenChange, isLoa
     if (editor.current?.dirty) setNextAction(() => action);
     else action();
   }
-  const onClose = () => guard(() => { setPreviewFor(null); setMissingFor(null); onOpenChange(false); });
+  const onClose = () => guard(() => { setPreviewFor(null); onOpenChange(false); });
   const accounting = invoice?.task?.stage === "accounting_classification";
   const canEdit = accounting && invoice.allowedActions.some(action => action === "classification.save" || action === "classification.complete");
   const taskPanel = invoice && <TaskActionPanel key={invoice.task?.id ?? "none"} invoice={invoice} guard={guard} onChanged={onChanged} />;
@@ -111,14 +98,14 @@ export function InvoiceDetailDrawer({ invoice: source, open, onOpenChange, isLoa
             </button>
           </header>
           {invoice && <div className={`${preview ? "hidden md:flex" : "flex"} shrink-0 items-center gap-2 border-b bg-zinc-50 px-3.5 pb-3 sm:pl-[76px] dark:bg-zinc-900 text-xs font-semibold`}>
-            {originalUrl && missingFor !== revisionKey ? <>
+            {originalUrl ? <>
               <button ref={toggle} aria-expanded={preview} onClick={() => preview ? closePreview() : setPreviewFor(revisionKey)}
                 className="inline-flex items-center gap-2 rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-amber-900"><Eye size={16}/>{preview ? "Ocultar vista previa" : "Ver original"}</button>
               <a href={originalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-md border px-3 py-2"><ExternalLink size={15}/>Abrir original</a>
             </> : <span role="status">Original no disponible</span>}
           </div>}
           <div className="flex min-h-0 flex-1">
-          {preview && originalUrl && <OriginalPreview key={revisionKey} url={originalUrl} close={closePreview} missing={markMissing}/>}
+          {preview && originalUrl && <OriginalPreview key={revisionKey} url={originalUrl} close={closePreview}/>}
 
           {!invoice && <p role="status" className="p-4 text-sm text-zinc-500">{isLoading ? "Loading invoice details..." : "Unable to load invoice details."}</p>}
           {invoice && <div key="detail" onFocusCapture={event => {
