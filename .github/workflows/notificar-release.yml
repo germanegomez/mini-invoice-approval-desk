@@ -1,0 +1,23 @@
+name: Notify portal release
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-24.04
+    environment: release-notification
+    steps:
+      - name: Send the main revision to the release coordinator
+        env:
+          COORDINATOR: ${{ vars.RELEASE_COORDINATOR }}
+          GH_TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$COORDINATOR" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          echo "::add-mask::$COORDINATOR"
+          test -n "$GH_TOKEN"
+          gh api --silent --method POST "repos/$COORDINATOR/actions/workflows/publicar-portal.yml/dispatches" \
+            -f ref=main -f "inputs[revision]=$GITHUB_SHA" -f "inputs[sender_run]=$GITHUB_RUN_ID"
