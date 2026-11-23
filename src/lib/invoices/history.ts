@@ -3,6 +3,8 @@ import type { QueryExecutor } from "./repository";
 import type { InvoiceReadScope } from "./scope";
 
 const titles = new Map(Object.entries({
+  "extraction.match": "Revisión técnica · Dato verificado",
+  "extraction.difference": "Revisión técnica · Diferencia derivada",
   start_human_circuit: "Inicio de la revisión",
   claim_task: "Tarea tomada",
   return_task: "Tarea devuelta",
@@ -82,6 +84,12 @@ export async function readInvoiceHistory(
         FROM selected s
         JOIN portal.audit_events a ON a.resource_type = 'wf05_invoice' AND a.resource_id = s.id::text
        WHERE a.action = 'task.revision_obsolete' AND a.result = 'success'
+      UNION ALL
+      SELECT 5, a.id, a.occurred_at, a.actor_user_id, a.action, NULL, a.new_values->>'revision',
+             concat_ws(' · ', a.new_values->>'field', a.reason), NULL, NULL, false
+        FROM selected s
+        JOIN portal.audit_events a ON a.resource_type='wf05_invoice' AND a.resource_id=s.id::text
+       WHERE a.action IN ('extraction.match','extraction.difference') AND a.result='success'
     )
     SELECT e.action, e.stage, e.occurred_at, e.revision,
            CASE WHEN position('@' IN u.display_name) = 0 THEN u.display_name END AS actor, e.reason,

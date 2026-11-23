@@ -29,6 +29,7 @@ export interface QueryExecutor {
 }
 
 interface HeaderRow extends Record<string, unknown> {
+  extraction_review?: InvoiceDetail["extractionReview"];
   cursor_updated_at: string;
   category: DisplayCategory;
   item_count: number | string;
@@ -310,7 +311,8 @@ export async function getInvoiceDetail(
   headerParts.clauses.push(`i.universal_raw_id = ${pushParameter(headerParts, universalRawId)}`);
   const actorParameter = pushParameter(headerParts, actor);
   const headers = await query<HeaderRow>(`
-    SELECT ${HEADER_COLUMNS}, portal.invoice_original_link(${actorParameter}::bigint, i.universal_raw_id) IS NOT NULL AS has_original
+    SELECT ${HEADER_COLUMNS}, portal.invoice_original_link(${actorParameter}::bigint, i.universal_raw_id) IS NOT NULL AS has_original,
+      portal.extraction_review(${actorParameter}::bigint, i.universal_raw_id) AS extraction_review
       FROM portal.invoices_v1 i
      WHERE ${headerParts.clauses.join(" AND ")}
      LIMIT 1
@@ -405,6 +407,7 @@ export async function getInvoiceDetail(
   const permissions = await readActorPermissions(query, actor);
   const history = await readInvoiceHistory(query, scope, universalRawId);
   const invoice = { ...mapInvoiceSummary(header), hasOriginal: header.has_original === true,
+    extractionReview: header.extraction_review ?? null,
     items: items.map(mapInvoiceItem), task, humanOutcome, continuation, history };
   const sourceAssignee = outcomeRow?.source_assignee;
   return { ...invoice, allowedActions: availableActions(invoice, actor, permissions, sourceAssignee == null ? null : String(sourceAssignee)) };
