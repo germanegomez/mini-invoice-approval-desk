@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Header } from "@/components/Header";
@@ -12,8 +13,7 @@ const sectionNames: Record<string,string> = {
   correction: "Corrección de extracción", regularization: "Regularización posterior", error: "Errores técnicos abiertos",
   unassigned: "Sin tarea registrada",
 };
-const dateFormat = new Intl.DateTimeFormat("es-AR", { dateStyle: "long", timeZone: "UTC" });
-const labelDate = (day: string) => dateFormat.format(new Date(day + "T00:00:00Z"));
+
 const fmt = (n: number | null) => n === null ? "Sin dato" : n.toLocaleString("es-AR", { maximumFractionDigits: 6 });
 
 function CaseGroup({ group }: { group: WeeklyReport["groups"][number] }) {
@@ -59,8 +59,8 @@ export default async function WeeklyPage({ searchParams }: { searchParams: Promi
     <Link href="/" className="text-sm underline">‹ Volver a Facturas</Link>
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div><h1 className="text-3xl font-bold">Resumen semanal</h1>
-        <p>Del {labelDate(week)} al {labelDate(shiftDate(week, 6))}</p>
-        <p className="text-sm">Proveedores WF05 · Corte al {labelDate(report.cutoff)}, 00:00 (Argentina)</p></div>
+        <p>Del {formatDate(week)} al {formatDate(shiftDate(week, 6))}</p>
+        <p className="text-sm">Proveedores WF05 · Corte al {formatDate(report.cutoff)}, 00:00 (Argentina)</p></div>
       <form className="flex items-end gap-2"><label className="text-sm">Semana del lunes
         <input className="block rounded border bg-transparent px-2 py-1" type="date" name="semana" defaultValue={week}
           min="1970-01-05" max={latest} step="7" required /></label><button className="rounded border px-3 py-1">Consultar</button></form>

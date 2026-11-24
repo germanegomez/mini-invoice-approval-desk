@@ -109,6 +109,7 @@ export interface ExtractionReview {
 }
 
 export interface InvoiceDetail extends InvoiceSummary {
+  issuerActivityStart?: string | null;
   extractionReview?: ExtractionReview | null;
   hasOriginal: boolean;
   history: InvoiceHistoryEvent[];

@@ -127,15 +127,17 @@ export function InvoiceDetailDrawer({ invoice: source, open, onOpenChange, isLoa
               </div>
 
               <div className="border-t border-zinc-200 dark:border-zinc-800/80 pt-2 sm:pt-3">
-                <span className="text-[10px] sm:text-[11px] font-mono uppercase text-zinc-500">Issue Date</span>
+                <span className="text-[10px] sm:text-[11px] font-mono uppercase text-zinc-500">Fecha de emisión</span>
                 <p className="text-xs font-mono text-zinc-800 dark:text-zinc-300 mt-0.5">{formatDate(invoice.issueDate)}</p>
               </div>
 
               <div className="border-t border-zinc-200 dark:border-zinc-800/80 pt-2 sm:pt-3">
-                <span className="text-[10px] sm:text-[11px] font-mono uppercase text-zinc-500">Due Date</span>
+                <span className="text-[10px] sm:text-[11px] font-mono uppercase text-zinc-500">Vencimiento</span>
                 <p className="text-xs font-mono text-zinc-800 dark:text-zinc-300 mt-0.5">{formatDate(invoice.dueDate)}</p>
               </div>
             </div>
+
+            {invoice.issuerActivityStart && <p className="text-xs">Inicio de actividades del emisor · {formatDate(invoice.issuerActivityStart)}</p>}
 
             {invoice.extractionReview && <ExtractionReviewPanel key={`${invoice.universalRawId}-${invoice.extractionReview.revision}`}
               invoice={invoice} review={invoice.extractionReview} guard={guard} onChanged={onChanged} />}
