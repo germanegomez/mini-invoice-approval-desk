@@ -5,6 +5,14 @@ import type { InvoiceReadScope } from "./scope";
 const titles = new Map(Object.entries({
   "extraction.match": "Revisión técnica · Dato verificado",
   "extraction.difference": "Revisión técnica · Diferencia derivada",
+  "extraction.propose": "Corrección propuesta",
+  "extraction.confirm": "Corrección confirmada por Contaduría",
+  "extraction.validate": "Validación de WF05",
+  "extraction.report_field": "Otra diferencia confirmada",
+  "extraction.request_copy": "Copia legible solicitada",
+  "extraction.request_supplier": "Comprobante corregido solicitado al proveedor",
+  "extraction.link_supplier": "Comprobante corregido vinculado",
+  "extraction.regularize": "Regularización documentada por Contaduría",
   start_human_circuit: "Inicio de la revisión",
   claim_task: "Tarea tomada",
   return_task: "Tarea devuelta",
@@ -86,10 +94,13 @@ export async function readInvoiceHistory(
        WHERE a.action = 'task.revision_obsolete' AND a.result = 'success'
       UNION ALL
       SELECT 5, a.id, a.occurred_at, a.actor_user_id, a.action, NULL, a.new_values->>'revision',
-             concat_ws(' · ', a.new_values->>'field', a.reason), NULL, NULL, false
+             concat_ws(' · ', a.new_values->>'case', a.new_values->>'field',
+               a.new_values->>'previous', a.new_values->>'value', a.reason), NULL, NULL, false
         FROM selected s
         JOIN portal.audit_events a ON a.resource_type='wf05_invoice' AND a.resource_id=s.id::text
-       WHERE a.action IN ('extraction.match','extraction.difference') AND a.result='success'
+       WHERE a.action IN ('extraction.match','extraction.difference','extraction.propose','extraction.confirm',
+                          'extraction.report_field','extraction.validate','extraction.request_copy',
+                          'extraction.request_supplier','extraction.link_supplier','extraction.regularize') AND a.result='success'
     )
     SELECT e.action, e.stage, e.occurred_at, e.revision,
            CASE WHEN position('@' IN u.display_name) = 0 THEN u.display_name END AS actor, e.reason,
@@ -103,7 +114,7 @@ export async function readInvoiceHistory(
     return {
       title: stage ? `${stage} · ${action}` : action,
       occurredAt: new Date(row.occurred_at).toISOString(),
-      actor: row.actor,
+      actor: row.actor ?? (row.action === "extraction.validate" ? "WF05" : null),
       reason: row.reason,
       revision: row.revision === null ? null : Number(row.revision),
       fromStatus: row.from_status !== row.to_status ? statuses.get(row.from_status ?? "") ?? null : null,

@@ -312,7 +312,8 @@ export async function getInvoiceDetail(
   const actorParameter = pushParameter(headerParts, actor);
   const headers = await query<HeaderRow>(`
     SELECT ${HEADER_COLUMNS}, portal.invoice_original_link(${actorParameter}::bigint, i.universal_raw_id) IS NOT NULL AS has_original,
-      portal.extraction_review(${actorParameter}::bigint, i.universal_raw_id) AS extraction_review
+      portal.extraction_review(${actorParameter}::bigint, i.universal_raw_id)
+        || COALESCE(portal.extraction_referral_details(${actorParameter}::bigint, i.universal_raw_id), '{}'::jsonb) AS extraction_review
       FROM portal.invoices_v1 i
      WHERE ${headerParts.clauses.join(" AND ")}
      LIMIT 1
