@@ -89,7 +89,21 @@ export interface InvoiceItem {
   updatedAt: string;
 }
 
+export interface ExtractionReview {
+  caseId: string;
+  revision: number;
+  warnings: unknown[];
+  observedFields: string[];
+  values: Record<string, string>;
+  status: string;
+  posted: boolean;
+  current: boolean;
+  canDecide: boolean;
+  referral: "correction" | "regularization" | null;
+}
+
 export interface InvoiceDetail extends InvoiceSummary {
+  extractionReview?: ExtractionReview | null;
   hasOriginal: boolean;
   history: InvoiceHistoryEvent[];
   allowedActions: string[];

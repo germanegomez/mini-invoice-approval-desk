@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import type { AuthenticatedPortalUser } from "@/lib/auth/guard";
 import {
   classificationSchema,
+  extractionDecisionSchema,
+  type ExtractionDecisionInput,
   continuationSchema,
   replacementSchema,
   startCircuitSchema,
@@ -55,6 +57,17 @@ function errorResponse(error: unknown) {
 
 function operationResponse(result: TaskOperationResult) {
   return privateJson({ success: result.ok, ...result }, { status: result.status });
+}
+
+export async function handleExtractionDecision(request: Request, id: string, dependencies: {
+  authenticate(): Promise<AuthenticatedPortalUser>;
+  decide(actor: string, invoice: number, input: ExtractionDecisionInput): Promise<TaskOperationResult>;
+}) {
+  try {
+    const actor = await dependencies.authenticate();
+    const input = extractionDecisionSchema.parse(await json(request));
+    return operationResponse(await dependencies.decide(actor.id, taskId(id), input));
+  } catch (error) { return errorResponse(error); }
 }
 
 export async function handleTaskAction(request: Request, id: string, dependencies: TaskControllerDependencies) {

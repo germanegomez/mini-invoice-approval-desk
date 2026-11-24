@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { ExtractionReviewPanel } from "./ExtractionReviewPanel";
 import { OriginalPreview } from "./OriginalPreview";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ClassificationEditor, type DraftHandle } from "./ClassificationEditor";
@@ -136,6 +137,8 @@ export function InvoiceDetailDrawer({ invoice: source, open, onOpenChange, isLoa
               </div>
             </div>
 
+            {invoice.extractionReview && <ExtractionReviewPanel key={`${invoice.universalRawId}-${invoice.extractionReview.revision}`}
+              invoice={invoice} review={invoice.extractionReview} guard={guard} onChanged={onChanged} />}
             {accounting && taskPanel}
             {canEdit ? <ClassificationEditor key={[invoice.universalRawId, invoice.extractionRevision, invoice.task?.id].join("-")}
               ref={editor} invoice={invoice} onChanged={onChanged} onDirtyChange={onDirtyChange} /> : <div className="space-y-2 sm:space-y-3">
