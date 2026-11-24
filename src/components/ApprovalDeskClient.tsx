@@ -16,14 +16,14 @@ import type { TabType, DisplayCategory } from "@/types/invoice";
 const emptyFilters: FilterState = { processingStage: "", preparationStatus: "", currency: "", issueDateFrom: "", issueDateTo: "" };
 const secondary = "inline-flex items-center justify-center gap-1 rounded-md border border-zinc-300 bg-zinc-100 px-2 py-1.5 font-mono text-xs text-zinc-700 hover:bg-zinc-200 disabled:opacity-40 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800";
 
-export function ApprovalDeskClient() {
+export function ApprovalDeskClient({ weeklyReport = false, initialInvoice = null }: { weeklyReport?: boolean; initialInvoice?: number | null }) {
   const [tab, setTab] = useState<TabType>("processing");
   const [search, setSearch] = useState("");
   const [vendor, setVendor] = useState("");
   const [filters, setFilters] = useState(emptyFilters);
   const [advanced, setAdvanced] = useState(false);
   const [pages, setPages] = useState<string[]>([]);
-  const [selectedId, select] = useState<number | null>(null);
+  const [selectedId, select] = useState<number | null>(initialInvoice);
   const list = useInvoicesQuery({
     tab, search, vendor, cursor: pages.at(-1),
     ...filters, processingStage: filters.processingStage || undefined,
@@ -41,7 +41,7 @@ export function ApprovalDeskClient() {
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col transition-colors duration-150">
       {/* Top Header */}
-      <Header />
+      <Header weeklyReport={weeklyReport} />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3.5 sm:py-8 space-y-3.5 sm:space-y-6">
