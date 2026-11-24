@@ -44,3 +44,22 @@ test("incomplete differences and client-supplied actors never reach the mutation
     assert.equal(response.status, 400); assert.equal(calls, 0);
   }
 });
+
+test("referral actions keep their authenticated actor, request identity and PostgreSQL status", async () => {
+  for (const decision of ["propose", "confirm", "report_field", "request_copy", "request_supplier", "link_supplier", "regularize"]) {
+    const value = ({ propose: "18500", confirm: "18500", regularize: "REG-129", link_supplier: "129099" } as Record<string,string>)[decision];
+    const input = { ...valid, decision, reason: "Contraste con el original", value, approvalTask: undefined };
+    for (const status of [200, 403, 409]) {
+      const response = await handleExtractionDecision(request(input), "122003", {
+        authenticate: async () => ({ id: "1222" }),
+        async decide(actor, invoice, command) {
+          assert.equal(actor, "1222"); assert.equal(invoice, 122003);
+          assert.deepEqual(command, JSON.parse(JSON.stringify(input)));
+          return { ok: status === 200, status, result: decision };
+        },
+      });
+      assert.equal(response.status, status);
+      assert.match(response.headers.get("cache-control") ?? "", /no-store/);
+    }
+  }
+});

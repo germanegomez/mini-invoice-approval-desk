@@ -5,6 +5,14 @@ import type { InvoiceReadScope } from "./scope";
 const titles = new Map(Object.entries({
   "extraction.match": "Revisión técnica · Dato verificado",
   "extraction.difference": "Revisión técnica · Diferencia derivada",
+  "extraction.propose": "Corrección propuesta",
+  "extraction.confirm": "Corrección confirmada por Contaduría",
+  "extraction.validate": "Validación de WF05",
+  "extraction.report_field": "Otra diferencia confirmada",
+  "extraction.request_copy": "Copia legible solicitada",
+  "extraction.request_supplier": "Comprobante corregido solicitado al proveedor",
+  "extraction.link_supplier": "Comprobante corregido vinculado",
+  "extraction.regularize": "Regularización documentada por Contaduría",
   start_human_circuit: "Inicio de la revisión",
   claim_task: "Tarea tomada",
   return_task: "Tarea devuelta",
@@ -49,6 +57,7 @@ interface HistoryRow extends Record<string, unknown> {
   from_status: string | null;
   to_status: string | null;
   invalidated: boolean;
+  replacement_id: string | null;
 }
 
 export async function readInvoiceHistory(
@@ -61,39 +70,45 @@ export async function readInvoiceHistory(
     ), events AS (
       SELECT 1 AS source, d.id, d.decided_at AS occurred_at, d.actor_user_id, d.action,
              t.stage, t.extraction_revision::text AS revision, d.reason, d.previous_status AS from_status,
-             d.resulting_status AS to_status, invalid.decision_id IS NOT NULL AS invalidated
+             d.resulting_status AS to_status, invalid.decision_id IS NOT NULL AS invalidated,
+             NULL::text AS replacement_id
         FROM selected s
         JOIN portal.human_tasks t ON t.universal_raw_id = s.id
         JOIN portal.human_decisions d ON d.task_id = t.id AND d.result = 'accepted'
         LEFT JOIN portal.human_decision_invalidations invalid ON invalid.decision_id = d.id
       UNION ALL
       SELECT 2, e.id, e.created_at, e.actor_user_id, e.event_type, NULL, j.extraction_revision::text,
-             NULL, NULL, NULL, false
+             NULL, NULL, NULL, false, NULL
         FROM selected s
         JOIN portal.post_approval_jobs_v1 j ON j.universal_raw_id = s.id
         JOIN portal.post_approval_job_events_v1 e ON e.operation_id = j.id
        WHERE e.event_type IN ('enqueued','claimed','recovered','running','retry_scheduled','completed','failed','superseded')
       UNION ALL
-      SELECT 3, l.id, l.created_at, l.actor_user_id, l.link_type, NULL, NULL, l.reason, NULL, NULL, false
+      SELECT 3, l.id, l.created_at, l.actor_user_id, l.link_type, NULL, NULL, l.reason, NULL, NULL, false, NULL
         FROM selected s
         JOIN portal.document_links l ON s.id IN (l.original_universal_raw_id, l.replacement_universal_raw_id)
        WHERE $2 IS NULL OR (l.original_universal_raw_id = ANY($2) AND l.replacement_universal_raw_id = ANY($2))
       UNION ALL
       SELECT 4, a.id, a.occurred_at, NULL, 'revision_changed', NULL,
-             a.new_values->>'extraction_revision', NULL, NULL, NULL, false
+             a.new_values->>'extraction_revision', NULL, NULL, NULL, false, NULL
         FROM selected s
         JOIN portal.audit_events a ON a.resource_type = 'wf05_invoice' AND a.resource_id = s.id::text
        WHERE a.action = 'task.revision_obsolete' AND a.result = 'success'
       UNION ALL
       SELECT 5, a.id, a.occurred_at, a.actor_user_id, a.action, NULL, a.new_values->>'revision',
-             concat_ws(' · ', a.new_values->>'field', a.reason), NULL, NULL, false
+             concat_ws(' · ', a.new_values->>'case', a.new_values->>'field',
+               NULLIF(a.new_values->>'difference', a.new_values->>'field'),
+               a.new_values->>'previous', a.new_values->>'value', a.reason), NULL, NULL, false,
+             CASE WHEN a.action='extraction.link_supplier' THEN a.new_values->>'value' END
         FROM selected s
         JOIN portal.audit_events a ON a.resource_type='wf05_invoice' AND a.resource_id=s.id::text
-       WHERE a.action IN ('extraction.match','extraction.difference') AND a.result='success'
+       WHERE a.action IN ('extraction.match','extraction.difference','extraction.propose','extraction.confirm',
+                          'extraction.report_field','extraction.validate','extraction.request_copy',
+                          'extraction.request_supplier','extraction.link_supplier','extraction.regularize') AND a.result='success'
     )
     SELECT e.action, e.stage, e.occurred_at, e.revision,
            CASE WHEN position('@' IN u.display_name) = 0 THEN u.display_name END AS actor, e.reason,
-           e.from_status, e.to_status, e.invalidated
+           e.from_status, e.to_status, e.invalidated, e.replacement_id
       FROM events e LEFT JOIN portal.users u ON u.id = e.actor_user_id
      ORDER BY e.occurred_at DESC, e.source, e.id DESC
   `, [invoiceId, allowedIds]);
@@ -103,8 +118,9 @@ export async function readInvoiceHistory(
     return {
       title: stage ? `${stage} · ${action}` : action,
       occurredAt: new Date(row.occurred_at).toISOString(),
-      actor: row.actor,
-      reason: row.reason,
+      actor: row.actor ?? (row.action === "extraction.validate" ? "WF05" : null),
+      reason: row.action === "extraction.link_supplier" && allowedIds !== null
+        && !allowedIds.includes(Number(row.replacement_id)) ? null : row.reason,
       revision: row.revision === null ? null : Number(row.revision),
       fromStatus: row.from_status !== row.to_status ? statuses.get(row.from_status ?? "") ?? null : null,
       toStatus: statuses.get(row.to_status ?? "") ?? null,

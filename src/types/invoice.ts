@@ -99,6 +99,12 @@ export interface ExtractionReview {
   posted: boolean;
   current: boolean;
   canDecide: boolean;
+  accounting?: boolean;
+  documentWait?: "legible_copy" | "supplier_document" | "replacement_linked" | null;
+  canLink?: boolean;
+  sourceField?: string;
+  canRequestSupplier?: boolean;
+  proposals?: Record<string, { value: string; id: string; field: string } | null> | null;
   referral: "correction" | "regularization" | null;
 }
 
