@@ -227,6 +227,20 @@ test("history is detail-only, scoped to the invoice, and exposes only business f
   assert.equal(miss.calls.length, 1);
 });
 
+test("a supplier replacement event exposes its details only when both invoices are readable", async () => {
+  const event = {
+    action: "extraction.link_supplier", stage: null, occurred_at: "2026-11-02T10:00:00Z",
+    reason: "129099 · Corregida 129099", replacement_id: "129099", revision: "1", invalidated: false,
+  };
+  for (const ids of [[41], [41, 129099]]) {
+    const { query } = queuedQuery([[headerRow], [], [], [], [], [], [event]]);
+    const invoice = await getInvoiceDetail(query, invoiceIdsReadScope(ids), 41, "7");
+    assert.equal(invoice?.history[0].title, "Comprobante corregido vinculado");
+    assert.equal(invoice.history[0].reason, ids.length === 1 ? null : event.reason);
+    assert.equal(JSON.stringify(invoice.history).includes("129099"), ids.length === 2);
+  }
+});
+
 test("timeline has an explicit empty state and omits absent actor, reason and transitions", () => {
   const render = (events: InvoiceDetail["history"]) =>
     renderToStaticMarkup(createElement(InvoiceHistoryTimeline, {events, currentRevision: 3}));

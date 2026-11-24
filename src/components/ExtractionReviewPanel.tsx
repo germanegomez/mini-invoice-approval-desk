@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { ExtractionReview, InvoiceDetail } from "@/types/invoice";
+import type { ExtractionDecisionInput } from "@/lib/tasks/contracts";
 
 const labels: Record<string, string> = {
   importe_total: "Importe total", subtotal: "Subtotal", punto_de_venta: "Punto de venta",
@@ -12,19 +13,37 @@ export function ExtractionReviewPanel({ invoice, review, guard, onChanged }: {
   invoice: InvoiceDetail; review: ExtractionReview;
   guard(action: () => void): void; onChanged(): Promise<void> | void;
 }) {
-  const firstObserved = review.observedFields[0]?.split("/").at(-1) ?? "";
-  const [field, setField] = useState(Object.hasOwn(review.values, firstObserved) ? firstObserved : "");
+  const firstObserved = review.sourceField || review.observedFields[0]?.split("/").at(-1) || "";
+  const fields = Array.from(new Set([...Object.keys(review.values), ...Object.keys(review.proposals ?? {}),
+    ...(review.sourceField ? [review.sourceField] : [])]));
+  const [field, setField] = useState(fields.includes(firstObserved) ? firstObserved : "");
   const [other, setOther] = useState("");
+  const [linkSource, setLinkSource] = useState(false);
   const [reason, setReason] = useState("");
+  const [value, setValue] = useState("");
+  const [replacement, setReplacement] = useState("");
+  const [reference, setReference] = useState("");
   const [approve, setApprove] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const retry = useRef<{ body: string; id: string } | null>(null);
   const selected = field === "other" ? other.trim() : field;
-  async function send(decision: "match" | "difference") {
+  const proposals = Object.entries(review.proposals ?? {}).filter(([difference, proposal]) =>
+    proposal && (difference === selected || proposal.field === selected));
+  const source = review.sourceField;
+  const canLinkSource = source && !Object.hasOwn(review.values, source) && selected !== source
+    && (!review.proposals || Object.hasOwn(review.proposals, source));
+  const proposalDifference = canLinkSource && linkSource ? source : selected;
+  async function send(decision: ExtractionDecisionInput["decision"], confirmation?: { difference: string; field: string; value: string }) {
+    const values: Partial<Record<ExtractionDecisionInput["decision"], string>> = {
+      confirm: confirmation?.value, propose: value.trim(), link_supplier: replacement.trim(), regularize: reference.trim(),
+    };
     const body = {
-      caseId: review.caseId, expectedRevision: review.revision, decision, field: selected,
-      reason: decision === "difference" ? reason.trim() : undefined,
+      caseId: review.caseId, expectedRevision: review.revision, decision, field: confirmation?.field ?? (selected || "documento"),
+      reason: decision !== "match" ? reason.trim() : undefined,
+      value: values[decision],
+      difference: decision === "propose" ? proposalDifference
+        : confirmation?.difference,
       approvalTask: decision === "match" && approve ? invoice.task?.id : undefined,
     };
     const fingerprint = JSON.stringify(body);
@@ -38,7 +57,8 @@ export function ExtractionReviewPanel({ invoice, review, guard, onChanged }: {
       });
       if (!response.ok) {
         if (response.status === 409) await onChanged();
-        throw new Error(response.status === 409 ? "El caso o la etapa cambió. Revisá el detalle actualizado."
+        throw new Error(response.status === 422 ? "Revisá el campo, el valor y el original antes de enviar."
+          : response.status === 409 ? "El caso o la etapa cambió. Revisá el detalle actualizado."
           : response.status === 403 ? "Tu usuario no puede decidir sobre este caso." : "No se pudo confirmar el envío. Podés reintentarlo.");
       }
       await onChanged();
@@ -50,19 +70,24 @@ export function ExtractionReviewPanel({ invoice, review, guard, onChanged }: {
     <h3 className="font-semibold">Advertencia de extracción · Revisión {review.revision}</h3>
     {review.warnings.map((warning, i) => <p key={i}>{typeof warning === "string" ? warning : JSON.stringify(warning)}</p>)}
     {review.observedFields.length > 0 && <p>Campos de la advertencia · {review.observedFields.join(", ")}</p>}
-    {review.referral ? <p role="status">{review.referral === "correction"
+    {review.sourceField && <p>Campo indicado en la derivación · {labels[review.sourceField] ?? review.sourceField}</p>}
+    {review.status !== "pending" ? <p>Caso cerrado</p> : review.referral ? <p role="status">{review.referral === "correction"
       ? "Derivada a corrección. La contabilización está bloqueada." : "Derivada a Contaduría para regularización."}</p>
-      : review.status !== "pending" ? <p>Caso cerrado</p> : !review.current ? <p>La revisión del caso ya no está vigente.</p> : null}
+      : !review.current ? <p>La revisión del caso ya no está vigente.</p> : null}
     <label className="block">Campo observado
-      <select className="ml-2 rounded border bg-transparent p-1" value={field} onChange={e => setField(e.target.value)}>
+      <select className="ml-2 rounded border bg-transparent p-1" value={field} onChange={e => {
+        setField(e.target.value);
+        setLinkSource(false);
+        setValue("");
+      }}>
         <option value="">Elegí el campo</option>
-        {Object.keys(review.values).map(key => <option key={key} value={key}>{labels[key] ?? key}</option>)}
+        {fields.map(key => <option key={key} value={key}>{labels[key] ?? key}</option>)}
         <option value="other">Otro campo</option>
       </select>
     </label>
     {field === "other" && <label className="block">Nombre del campo <input maxLength={160} value={other}
       onChange={e => setOther(e.target.value)} className="rounded border bg-transparent p-1" /></label>}
-    {field && field !== "other" && <p>{review.posted ? "Valor contabilizado" : "Valor extraído"} · <strong>{review.values[field]}</strong></p>}
+    {field && field !== "other" && <p>{review.posted ? "Valor contabilizado" : "Valor extraído"} · <strong>{review.values[field] ?? "Sin dato"}</strong></p>}
     {actionable && <fieldset disabled={busy} className="space-y-2">
       <label className="block">Motivo de la diferencia <textarea maxLength={1000} value={reason}
         onChange={e => setReason(e.target.value)} className="block w-full rounded border bg-transparent p-2" /></label>
@@ -77,5 +102,56 @@ export function ExtractionReviewPanel({ invoice, review, guard, onChanged }: {
       </div>
     </fieldset>}
     {error && <p role="alert">{error}</p>}
+    {review.referral === "regularization" && review.posted && review.current && review.accounting && review.status === "pending" &&
+      <fieldset disabled={busy} className="space-y-2">
+        <label className="block">Resultado de la regularización <textarea value={reason} maxLength={1000}
+          onChange={e => setReason(e.target.value)} className="block w-full rounded border p-2" /></label>
+        <label className="block">Referencia verificable del trámite <input value={reference} maxLength={1000}
+          onChange={e => setReference(e.target.value)} className="block w-full rounded border p-1" /></label>
+        <button disabled={!reason.trim() || !reference.trim()} className="rounded border px-3 py-2 disabled:opacity-50"
+          onClick={() => guard(() => { void send("regularize"); })}>Cerrar regularización</button>
+      </fieldset>}
+    {review.documentWait && <p role="status">{{
+      legible_copy: "Pendiente de copia legible.", supplier_document: "Pendiente del comprobante corregido del proveedor.",
+      replacement_linked: "Comprobante corregido vinculado al original.",
+    }[review.documentWait]}</p>}
+    {review.referral === "correction" && !review.documentWait && review.canDecide && review.current && review.status === "pending" &&
+      <fieldset disabled={busy} className="space-y-2">
+        <label className="block">Valor que figura en el original
+          <input value={value} maxLength={1000} onChange={e => setValue(e.target.value)} className="block rounded border p-1" />
+        </label>
+        {/(^| · )(importe_total|subtotal|precio_unitario|cantidad)$/.test(selected) && <p>Sin separador de miles. Por ejemplo, 18500,00.</p>}
+        <label className="block">Motivo de la propuesta o confirmación
+          <textarea value={reason} maxLength={1000} onChange={e => setReason(e.target.value)} className="block w-full rounded border p-2" />
+        </label>
+        {canLinkSource && Object.hasOwn(review.values, selected) && <label className="block">
+          <input type="checkbox" checked={linkSource} onChange={e => setLinkSource(e.target.checked)} /> Vincular esta propuesta con la observación «{source}»
+        </label>}
+        <button disabled={!Object.hasOwn(review.values, selected) || !reason.trim() || !value.trim()}
+          className="rounded border px-3 py-2 disabled:opacity-50"
+          onClick={() => guard(() => { void send("propose"); })}>Proponer corrección</button>
+        {proposals.map(([difference, proposal]) => proposal && <div key={difference}>
+          <p>{labels[proposal.field] ?? proposal.field} · Valor propuesto · <strong>{proposal.value}</strong>.
+            {" "}Diferencia que se resolverá · {difference}</p>
+          {review.accounting && <button disabled={!reason.trim()} className="rounded border px-3 py-2 disabled:opacity-50"
+            onClick={() => guard(() => { void send("confirm", { difference, field: proposal.field, value: proposal.value }); })}>
+            Contrasté el original y confirmo {proposal.value}
+          </button>}
+        </div>)}
+        <button disabled={!selected || field === "other" || !reason.trim()} className="rounded border px-3 py-2 disabled:opacity-50"
+          onClick={() => guard(() => { void send("report_field"); })}>Registrar otra diferencia</button>
+        <button disabled={!reason.trim()} className="rounded border px-3 py-2 disabled:opacity-50"
+          onClick={() => guard(() => { void send("request_copy"); })}>Solicitar copia legible</button>
+        {review.canRequestSupplier && <button disabled={!reason.trim()} className="rounded border px-3 py-2 disabled:opacity-50"
+          onClick={() => guard(() => { void send("request_supplier"); })}>Registrar solicitud de comprobante corregido</button>}
+      </fieldset>}
+    {review.current && review.canLink && review.documentWait === "supplier_document" && <fieldset disabled={busy} className="space-y-2">
+      <label className="block">ID de la factura corregida <input inputMode="numeric" value={replacement}
+        onChange={e => setReplacement(e.target.value)} className="rounded border p-1" /></label>
+      <label className="block">Motivo del vínculo <textarea value={reason} maxLength={1000} onChange={e => setReason(e.target.value)}
+        className="block w-full rounded border p-2" /></label>
+      <button disabled={!/^[1-9][0-9]{0,8}$/.test(replacement) || !reason.trim()} className="rounded border px-3 py-2 disabled:opacity-50"
+        onClick={() => guard(() => { void send("link_supplier"); })}>Vincular comprobante corregido</button>
+    </fieldset>}
   </section>;
 }
