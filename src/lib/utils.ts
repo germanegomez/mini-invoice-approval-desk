@@ -39,31 +39,25 @@ export function formatCurrency(amount: number | string | null | undefined, curre
     .join("");
 }
 
+const localTime = new Intl.DateTimeFormat("es-AR", {
+  timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit",
+  day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+
 export function formatDate(date: Date | string | null | undefined): string {
   if (!date) return "-";
-  const d = typeof date === "string" ? new Date(date) : date;
-  if (isNaN(d.getTime())) return "-";
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(d);
+  const iso = date instanceof Date && Number.isFinite(date.getTime()) ? date.toISOString() : date;
+  if (typeof iso !== "string") return "-";
+  const match = /^(\d{4})-(0[1-9]|1[0-2])(?:-(0[1-9]|[12]\d|3[01]))?(?:$|T)/.exec(iso);
+  if (!match) return "-";
+  const [, year, month, day] = match;
+  return day ? `${day}/${month}/${year}` : `${month}/${year}`;
 }
 
 export function formatDateTime(date: Date | string | null | undefined): string {
   if (!date) return "-";
-  const d = typeof date === "string" ? new Date(date) : date;
-  if (isNaN(d.getTime())) return "-";
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).format(d);
+  const instant = new Date(date);
+  return Number.isFinite(instant.getTime()) ? localTime.format(instant) : "-";
 }
 
 export function getStatusConfig(status: string) {

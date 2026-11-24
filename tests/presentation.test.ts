@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { availableActions } from "../src/lib/tasks/available-actions";
 import { displayCategory, tabCategories } from "../src/lib/invoices/presentation";
 import { KPIBar } from "../src/components/KPIBar";
-import { formatCurrency } from "../src/lib/utils";
+import { formatCurrency, formatDate, formatDateTime } from "../src/lib/utils";
 import type { HumanTask, CurrencyTotal, HumanOutcome } from "../src/types/invoice";
 
 test("the decision table partitions all signal combinations and the three tabs exactly once", () => {
@@ -56,4 +56,11 @@ test("only queue owners claim available work and only assignees or admins see st
   const claimed = {...invoice,task:{...task,status:"claimed" as const,assigneeUserId:"7"}};
   assert.deepEqual(availableActions(claimed,"7",grants,null),["stage.approve"]);
   assert.deepEqual(availableActions(claimed,"8",grants,null),[]);
+});
+
+test("calendar dates keep their printed precision and instants use Buenos Aires time", () => {
+  assert.equal(formatDate("2020-02-29"), "29/02/2020");
+  assert.equal(formatDate("2020-02"), "02/2020");
+  assert.equal(formatDate(null), "-");
+  assert.match(formatDateTime("2020-03-01T01:20:00Z"), /29\/02\/2020.*22:20/);
 });

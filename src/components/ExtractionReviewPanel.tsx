@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDate } from "@/lib/utils";
 import { useRef, useState } from "react";
 import type { ExtractionReview, InvoiceDetail } from "@/types/invoice";
 import type { ExtractionDecisionInput } from "@/lib/tasks/contracts";
@@ -8,6 +9,12 @@ const labels: Record<string, string> = {
   importe_total: "Importe total", subtotal: "Subtotal", punto_de_venta: "Punto de venta",
   comp_nro: "Número de comprobante", fecha_emision: "Fecha de emisión", moneda: "Moneda", cae: "CAE",
 };
+
+function displayValue(field: string, value: string | null | undefined) {
+  if (!value) return "Sin dato";
+  if (/^(fecha_|periodo_(desde|hasta)$)/.test(field) && /^\d{4}-\d{2}(?:-\d{2})?$/.test(value)) return formatDate(value);
+  return value;
+}
 
 export function ExtractionReviewPanel({ invoice, review, guard, onChanged }: {
   invoice: InvoiceDetail; review: ExtractionReview;
@@ -35,8 +42,13 @@ export function ExtractionReviewPanel({ invoice, review, guard, onChanged }: {
     && (!review.proposals || Object.hasOwn(review.proposals, source));
   const proposalDifference = canLinkSource && linkSource ? source : selected;
   async function send(decision: ExtractionDecisionInput["decision"], confirmation?: { difference: string; field: string; value: string }) {
+    const typed = value.trim();
+    let proposedValue = /^(fecha_|periodo_(desde|hasta)$)/.test(selected)
+      ? typed.replace(/^(\d{2})\/(\d{2})\/(\d{4})$/, "$3-$2-$1")
+      : typed;
+    if (selected === "fecha_inicio_actividades") proposedValue = proposedValue.replace(/^(\d{2})\/(\d{4})$/, "$2-$1");
     const values: Partial<Record<ExtractionDecisionInput["decision"], string>> = {
-      confirm: confirmation?.value, propose: value.trim(), link_supplier: replacement.trim(), regularize: reference.trim(),
+      confirm: confirmation?.value, propose: proposedValue, link_supplier: replacement.trim(), regularize: reference.trim(),
     };
     const body = {
       caseId: review.caseId, expectedRevision: review.revision, decision, field: confirmation?.field ?? (selected || "documento"),
@@ -87,7 +99,7 @@ export function ExtractionReviewPanel({ invoice, review, guard, onChanged }: {
     </label>
     {field === "other" && <label className="block">Nombre del campo <input maxLength={160} value={other}
       onChange={e => setOther(e.target.value)} className="rounded border bg-transparent p-1" /></label>}
-    {field && field !== "other" && <p>{review.posted ? "Valor contabilizado" : "Valor extraído"} · <strong>{review.values[field] ?? "Sin dato"}</strong></p>}
+    {field && field !== "other" && <p>{review.posted ? "Valor contabilizado" : "Valor extraído"} · <strong>{displayValue(field, review.values[field])}</strong></p>}
     {actionable && <fieldset disabled={busy} className="space-y-2">
       <label className="block">Motivo de la diferencia <textarea maxLength={1000} value={reason}
         onChange={e => setReason(e.target.value)} className="block w-full rounded border bg-transparent p-2" /></label>
@@ -131,11 +143,11 @@ export function ExtractionReviewPanel({ invoice, review, guard, onChanged }: {
           className="rounded border px-3 py-2 disabled:opacity-50"
           onClick={() => guard(() => { void send("propose"); })}>Proponer corrección</button>
         {proposals.map(([difference, proposal]) => proposal && <div key={difference}>
-          <p>{labels[proposal.field] ?? proposal.field} · Valor propuesto · <strong>{proposal.value}</strong>.
+          <p>{labels[proposal.field] ?? proposal.field} · Valor propuesto · <strong>{displayValue(proposal.field, proposal.value)}</strong>.
             {" "}Diferencia que se resolverá · {difference}</p>
           {review.accounting && <button disabled={!reason.trim()} className="rounded border px-3 py-2 disabled:opacity-50"
             onClick={() => guard(() => { void send("confirm", { difference, field: proposal.field, value: proposal.value }); })}>
-            Contrasté el original y confirmo {proposal.value}
+            Contrasté el original y confirmo {displayValue(proposal.field, proposal.value)}
           </button>}
         </div>)}
         <button disabled={!selected || field === "other" || !reason.trim()} className="rounded border px-3 py-2 disabled:opacity-50"
