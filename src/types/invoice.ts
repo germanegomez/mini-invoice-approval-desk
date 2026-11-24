@@ -104,7 +104,7 @@ export interface ExtractionReview {
   canLink?: boolean;
   sourceField?: string;
   canRequestSupplier?: boolean;
-  proposals?: Record<string, { value: string; id: string } | null> | null;
+  proposals?: Record<string, { value: string; id: string; field: string } | null> | null;
   referral: "correction" | "regularization" | null;
 }
 

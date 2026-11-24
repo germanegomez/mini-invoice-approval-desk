@@ -9,9 +9,11 @@ export const extractionDecisionSchema = z.object({
   decision: z.enum(["match", "difference", "report_field", "propose", "confirm", "request_copy", "request_supplier", "link_supplier", "regularize"]),
   value: z.string().trim().min(1).max(1000).optional(),
   field: z.string().trim().min(1).max(160),
+  difference: z.string().trim().min(1).max(160).optional(),
   reason: z.string().trim().max(1000).optional(),
   approvalTask: z.number().int().positive().optional(),
-}).strict().refine(input => input.decision === "match" || (input.reason && !input.approvalTask))
+}).strict().refine(input => !input.difference || input.decision === "propose" || input.decision === "confirm")
+  .refine(input => input.decision === "match" || (input.reason && !input.approvalTask))
   .refine(input => ["propose", "confirm", "link_supplier", "regularize"].includes(input.decision) ? Boolean(input.value) : input.value === undefined);
 export type ExtractionDecisionInput = z.infer<typeof extractionDecisionSchema>;
 

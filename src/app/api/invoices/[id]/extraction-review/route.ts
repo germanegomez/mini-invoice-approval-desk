@@ -10,7 +10,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         const [row] = await client`SELECT portal.act_on_extraction_referral(
           ${actor}::bigint, ${invoice}::integer, ${input.caseId}::text, ${input.expectedRevision}::integer,
           ${input.decision_id}::uuid, ${input.decision}::text, ${input.field}::text,
-          ${input.reason ?? null}::text, ${input.value ?? null}::text) AS result`;
+          ${input.reason ?? null}::text, ${input.value ?? null}::text, ${input.difference ?? null}::text) AS result`;
         return row.result;
       }
       const [row] = await client`SELECT portal.decide_extraction_review(

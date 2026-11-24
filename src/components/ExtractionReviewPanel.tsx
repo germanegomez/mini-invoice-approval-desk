@@ -18,6 +18,7 @@ export function ExtractionReviewPanel({ invoice, review, guard, onChanged }: {
     ...(review.sourceField ? [review.sourceField] : [])]));
   const [field, setField] = useState(fields.includes(firstObserved) ? firstObserved : "");
   const [other, setOther] = useState("");
+  const [linkSource, setLinkSource] = useState(false);
   const [reason, setReason] = useState("");
   const [value, setValue] = useState("");
   const [replacement, setReplacement] = useState("");
@@ -27,15 +28,22 @@ export function ExtractionReviewPanel({ invoice, review, guard, onChanged }: {
   const [error, setError] = useState("");
   const retry = useRef<{ body: string; id: string } | null>(null);
   const selected = field === "other" ? other.trim() : field;
-  const proposal = review.proposals?.[selected];
-  async function send(decision: ExtractionDecisionInput["decision"]) {
+  const proposals = Object.entries(review.proposals ?? {}).filter(([difference, proposal]) =>
+    proposal && (difference === selected || proposal.field === selected));
+  const source = review.sourceField;
+  const canLinkSource = source && !Object.hasOwn(review.values, source) && selected !== source
+    && (!review.proposals || Object.hasOwn(review.proposals, source));
+  const proposalDifference = canLinkSource && linkSource ? source : selected;
+  async function send(decision: ExtractionDecisionInput["decision"], confirmation?: { difference: string; field: string; value: string }) {
     const values: Partial<Record<ExtractionDecisionInput["decision"], string>> = {
-      confirm: proposal?.value, propose: value.trim(), link_supplier: replacement.trim(), regularize: reference.trim(),
+      confirm: confirmation?.value, propose: value.trim(), link_supplier: replacement.trim(), regularize: reference.trim(),
     };
     const body = {
-      caseId: review.caseId, expectedRevision: review.revision, decision, field: selected || "documento",
+      caseId: review.caseId, expectedRevision: review.revision, decision, field: confirmation?.field ?? (selected || "documento"),
       reason: decision !== "match" ? reason.trim() : undefined,
       value: values[decision],
+      difference: decision === "propose" ? proposalDifference
+        : confirmation?.difference,
       approvalTask: decision === "match" && approve ? invoice.task?.id : undefined,
     };
     const fingerprint = JSON.stringify(body);
@@ -67,7 +75,11 @@ export function ExtractionReviewPanel({ invoice, review, guard, onChanged }: {
       ? "Derivada a corrección. La contabilización está bloqueada." : "Derivada a Contaduría para regularización."}</p>
       : !review.current ? <p>La revisión del caso ya no está vigente.</p> : null}
     <label className="block">Campo observado
-      <select className="ml-2 rounded border bg-transparent p-1" value={field} onChange={e => setField(e.target.value)}>
+      <select className="ml-2 rounded border bg-transparent p-1" value={field} onChange={e => {
+        setField(e.target.value);
+        setLinkSource(false);
+        setValue("");
+      }}>
         <option value="">Elegí el campo</option>
         {fields.map(key => <option key={key} value={key}>{labels[key] ?? key}</option>)}
         <option value="other">Otro campo</option>
@@ -112,14 +124,22 @@ export function ExtractionReviewPanel({ invoice, review, guard, onChanged }: {
         <label className="block">Motivo de la propuesta o confirmación
           <textarea value={reason} maxLength={1000} onChange={e => setReason(e.target.value)} className="block w-full rounded border p-2" />
         </label>
-        <button disabled={!selected || field === "other" || !reason.trim() || !value.trim()}
+        {canLinkSource && Object.hasOwn(review.values, selected) && <label className="block">
+          <input type="checkbox" checked={linkSource} onChange={e => setLinkSource(e.target.checked)} /> Vincular esta propuesta con la observación «{source}»
+        </label>}
+        <button disabled={!Object.hasOwn(review.values, selected) || !reason.trim() || !value.trim()}
           className="rounded border px-3 py-2 disabled:opacity-50"
           onClick={() => guard(() => { void send("propose"); })}>Proponer corrección</button>
-        {proposal && <p>Valor propuesto · <strong>{proposal.value}</strong></p>}
+        {proposals.map(([difference, proposal]) => proposal && <div key={difference}>
+          <p>{labels[proposal.field] ?? proposal.field} · Valor propuesto · <strong>{proposal.value}</strong>.
+            {" "}Diferencia que se resolverá · {difference}</p>
+          {review.accounting && <button disabled={!reason.trim()} className="rounded border px-3 py-2 disabled:opacity-50"
+            onClick={() => guard(() => { void send("confirm", { difference, field: proposal.field, value: proposal.value }); })}>
+            Contrasté el original y confirmo {proposal.value}
+          </button>}
+        </div>)}
         <button disabled={!selected || field === "other" || !reason.trim()} className="rounded border px-3 py-2 disabled:opacity-50"
           onClick={() => guard(() => { void send("report_field"); })}>Registrar otra diferencia</button>
-        {review.accounting && proposal && <button disabled={!reason.trim()} className="rounded border px-3 py-2 disabled:opacity-50"
-          onClick={() => guard(() => { void send("confirm"); })}>Contrasté el original y confirmo {proposal.value}</button>}
         <button disabled={!reason.trim()} className="rounded border px-3 py-2 disabled:opacity-50"
           onClick={() => guard(() => { void send("request_copy"); })}>Solicitar copia legible</button>
         {review.canRequestSupplier && <button disabled={!reason.trim()} className="rounded border px-3 py-2 disabled:opacity-50"
