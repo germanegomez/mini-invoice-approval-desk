@@ -98,11 +98,11 @@ export function InvoiceDetailDrawer({ invoice: source, open, onOpenChange, isLoa
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </header>
-          {invoice && <div className={`${preview ? "hidden md:flex" : "flex"} shrink-0 items-center gap-2 border-b bg-zinc-50 px-3.5 pb-3 sm:pl-[76px] dark:bg-zinc-900 text-xs font-semibold`}>
+          {invoice && <div className={`${preview ? "hidden md:flex" : "flex"} shrink-0 items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 px-3.5 pb-3 sm:pl-[76px] dark:bg-zinc-900 text-xs font-semibold`}>
             {originalUrl ? <>
               <button ref={toggle} aria-expanded={preview} onClick={() => preview ? closePreview() : setPreviewFor(revisionKey)}
                 className="inline-flex items-center gap-2 rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-amber-900"><Eye size={16}/>{preview ? "Ocultar vista previa" : "Ver original"}</button>
-              <a href={originalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-md border px-3 py-2"><ExternalLink size={15}/>Abrir original</a>
+              <a href={originalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-md border border-zinc-300 dark:border-zinc-700 px-3 py-2"><ExternalLink size={15}/>Abrir original</a>
             </> : <span role="status">Original no disponible</span>}
           </div>}
           <div className="flex min-h-0 flex-1">

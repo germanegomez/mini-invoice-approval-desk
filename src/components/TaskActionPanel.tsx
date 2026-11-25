@@ -70,7 +70,7 @@ export function TaskActionPanel({ invoice, onChanged, guard = action => action()
       <h3 className="text-xs font-mono uppercase tracking-wider font-bold text-zinc-500 dark:text-zinc-400">Revisión de la factura</h3>
       {invoice.humanOutcome && <p>{reviewResults[invoice.humanOutcome.outcome]}</p>}
     </div>
-    {invoice.continuation ? <div className="rounded border p-3">
+    {invoice.continuation ? <div className="rounded border border-zinc-200 dark:border-zinc-800 p-3">
       <h4 className="text-xs font-bold uppercase tracking-wide text-zinc-500">Procesamiento posterior a la aprobación</h4>
       <p className="mt-1 font-mono text-xs">{invoice.continuation.status} · intento {invoice.continuation.attempts}/3</p>
       {invoice.continuation.errorCode && <p className="mt-1 text-xs text-rose-600">{invoice.continuation.errorCode}: {invoice.continuation.errorDetail}</p>}
