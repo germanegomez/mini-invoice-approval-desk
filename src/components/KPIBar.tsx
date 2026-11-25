@@ -1,3 +1,4 @@
+import { metricLabel, metricValue } from "./deskStyles";
 import React from "react";
 import type { CategoryStats, DisplayCategory } from "@/types/invoice";
 import { currencyLabel, formatCurrency } from "@/lib/utils";
@@ -63,7 +64,7 @@ export function KPIBar({ stats }: KPIBarProps) {
             className={`relative overflow-hidden rounded-xl bg-white dark:bg-zinc-900/80 border ${card.borderColor} p-2.5 sm:p-4 transition-all duration-200 hover:border-zinc-400 dark:hover:border-zinc-700 shadow-sm`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[10px] sm:text-xs uppercase font-mono font-bold tracking-wider text-zinc-500 dark:text-zinc-400 truncate pr-1">
+              <span className={`${metricLabel} truncate pr-1`}>
                 {card.title}
               </span>
               <div className={`p-1 sm:p-1.5 rounded-lg ${card.accentBg} ${card.textColor} shrink-0`}>
@@ -72,7 +73,7 @@ export function KPIBar({ stats }: KPIBarProps) {
             </div>
 
             <div className="mt-1.5 sm:mt-3 flex flex-col sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between gap-1">
-              <div className="min-w-0 max-w-full space-y-0.5 break-words text-sm sm:text-xl xl:text-2xl font-bold font-mono tabular-nums text-zinc-900 dark:text-zinc-100 tracking-tight">
+              <div className={`min-w-0 max-w-full space-y-0.5 break-words ${metricValue}`}>
                 {totals.length ? totals.map(total => {
                   const subtotal = formatCurrency(total.amount, total.currency);
                   return <div key={total.currency}>{subtotal === "—" ? `${currencyLabel(total.currency)} —` : subtotal}</div>;

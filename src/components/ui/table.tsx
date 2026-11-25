@@ -1,4 +1,5 @@
 import * as React from "react";
+import { rowBorder } from "../deskStyles";
 import { cn } from "@/lib/utils";
 
 const Table = React.forwardRef<
@@ -57,7 +58,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b border-zinc-200 dark:border-zinc-800/80 transition-colors hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50 data-[state=selected]:bg-amber-500/10",
+      rowBorder, "transition-colors hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50 data-[state=selected]:bg-amber-500/10",
       className
     )}
     {...props}
