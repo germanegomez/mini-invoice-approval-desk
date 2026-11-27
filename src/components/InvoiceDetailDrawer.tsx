@@ -137,6 +137,7 @@ export function InvoiceDetailDrawer({ invoice: source, open, onOpenChange, isLoa
               </div>
             </div>
 
+            {invoice.issuerTradeName && <p className="text-xs">Nombre comercial · {invoice.issuerTradeName}</p>}
             {invoice.issuerActivityStart && <p className="text-xs">Inicio de actividades del emisor · {formatDate(invoice.issuerActivityStart)}</p>}
 
             {invoice.extractionReview && <ExtractionReviewPanel key={`${invoice.universalRawId}-${invoice.extractionReview.revision}`}

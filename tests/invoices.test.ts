@@ -49,6 +49,7 @@ const headerRow = {
   importe_total: "1200.50",
   cuit_emisor: "20111111112",
   razon_social_emisor: "Proveedor sintético",
+  nombre_comercial_emisor: "Marca de prueba",
   cuit_receptor: null,
   razon_social_receptor: null,
   raw_text: "must-never-leave-the-repository",
@@ -155,6 +156,7 @@ test("DTO mapping excludes raw, LLM, source and document fields", () => {
   }
   assert.equal(summary.universalRawId, 41);
   assert.equal(summary.extractionRevision, 3);
+  assert.equal(summary.issuerTradeName, "Marca de prueba");
   assert.equal(summary.dueDate, null);
 });
 
@@ -183,6 +185,7 @@ test("search remains parameterized and escapes SQL wildcard characters", async (
   const { query, calls } = queuedQuery([[]]);
   await listInvoices(query, allInvoiceReadScope(), { limit: 25, search: "Proveedor%_" });
   assert.doesNotMatch(calls[0].text, /Proveedor/);
+  assert.match(calls[0].text, /OR i\.nombre_comercial_emisor ILIKE \$1/);
   assert.equal(calls[0].parameters[0], "%Proveedor\\%\\_%");
   assert.match(calls[0].text, /concat_ws\('-', i\.punto_de_venta, i\.comp_nro\)/);
 });

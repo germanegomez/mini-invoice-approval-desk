@@ -63,6 +63,7 @@ export interface InvoiceSummary {
   totalAmount: string | null;
   issuerTaxId: string | null;
   issuerName: string | null;
+  issuerTradeName: string | null;
   receiverTaxId: string | null;
   receiverName: string | null;
 }

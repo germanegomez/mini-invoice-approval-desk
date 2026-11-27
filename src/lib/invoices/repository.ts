@@ -53,6 +53,7 @@ interface HeaderRow extends Record<string, unknown> {
   importe_total: string | null;
   cuit_emisor: string | null;
   razon_social_emisor: string | null;
+  nombre_comercial_emisor: string | null;
   cuit_receptor: string | null;
   razon_social_receptor: string | null;
 }
@@ -134,6 +135,7 @@ const HEADER_COLUMNS = `
   i.importe_total,
   i.cuit_emisor,
   i.razon_social_emisor,
+  i.nombre_comercial_emisor,
   i.cuit_receptor,
   i.razon_social_receptor`;
 
@@ -164,6 +166,7 @@ export function mapInvoiceSummary(row: HeaderRow): InvoiceSummary {
     totalAmount: row.importe_total,
     issuerTaxId: row.cuit_emisor,
     issuerName: row.razon_social_emisor,
+    issuerTradeName: row.nombre_comercial_emisor,
     receiverTaxId: row.cuit_receptor,
     receiverName: row.razon_social_receptor,
   };
@@ -253,6 +256,7 @@ function scopedWhere(
     parts.clauses.push(`(
       ${alias}.cuit_emisor ILIKE ${search} ESCAPE '\\'
       OR ${alias}.razon_social_emisor ILIKE ${search} ESCAPE '\\'
+      OR ${alias}.nombre_comercial_emisor ILIKE ${search} ESCAPE '\\'
       OR ${alias}.cuit_receptor ILIKE ${search} ESCAPE '\\'
       OR ${alias}.razon_social_receptor ILIKE ${search} ESCAPE '\\'
       OR ${alias}.punto_de_venta ILIKE ${search} ESCAPE '\\'

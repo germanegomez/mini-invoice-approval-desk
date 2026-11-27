@@ -6,6 +6,7 @@ import type { ExtractionReview, InvoiceDetail } from "@/types/invoice";
 import type { ExtractionDecisionInput } from "@/lib/tasks/contracts";
 
 const labels: Record<string, string> = {
+  razon_social_emisor: "Razón social del emisor", nombre_comercial_emisor: "Nombre comercial",
   importe_total: "Importe total", subtotal: "Subtotal", punto_de_venta: "Punto de venta",
   comp_nro: "Número de comprobante", fecha_emision: "Fecha de emisión", moneda: "Moneda", cae: "CAE",
 };
